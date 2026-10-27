@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:5000';
+﻿const API_BASE = '/api-backend';
 
 type FetchOptions = {
   method?: string;
@@ -21,11 +21,15 @@ export async function api(endpoint: string, options: FetchOptions = {}) {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store', // Disable caching to ensure fresh data (like config)
   });
 
   const data = await res.json();
 
   if (!res.ok) {
+    if (data.requiresOtp) {
+      return data;
+    }
     throw new Error(data.error || 'Request failed');
   }
 
@@ -41,3 +45,4 @@ export const apiPost = (endpoint: string, body: unknown, token?: string | null) 
 
 export const apiPut = (endpoint: string, body: unknown, token?: string | null) =>
   api(endpoint, { method: 'PUT', body, token });
+

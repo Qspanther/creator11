@@ -1,7 +1,8 @@
 const sequelize = require('./index');
-const { Creator, Tournament } = require('./models');
+const { Creator, Tournament, User } = require('./models');
 const config = require('../config');
 const { v4: uuidv4 } = require('uuid');
+const bcrypt = require('bcryptjs');
 
 // ─── Realistic Creator Data ───
 // 50 creators: 25 YouTube + 25 Instagram, 5 per category per platform
@@ -120,6 +121,19 @@ async function seed() {
     console.log('🌱 Seeding database...');
 
     await sequelize.sync({ force: true });
+
+    // ─── 4. Mock Users & Teams ───
+    console.log('Seeding users and teams...');
+
+    // Admin User
+    const adminPassword = await bcrypt.hash('admin123', 10);
+    const admin = await User.create({
+      name: 'Admin',
+      email: 'admin@creator11.com',
+      password_hash: adminPassword,
+      role: 'admin',
+      kyc_status: 'verified',
+    });
 
     // Seed YouTube creators
     const ytCreators = youtubeCreators.map(c => ({

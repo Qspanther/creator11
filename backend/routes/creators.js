@@ -5,11 +5,12 @@ const { Creator } = require('../db/models');
 const router = express.Router();
 
 // GET /creators — List creators with optional filters
-router.get('/', authenticate, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { platform, category, sort } = req.query;
     const where = {};
-    if (platform) where.platform = platform;
+    if (platform && platform !== "all") where.platform = platform;
+    else if (!platform) where.platform = "youtube";
     if (category) where.category = category;
 
     const order = [];

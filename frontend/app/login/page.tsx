@@ -85,6 +85,13 @@ export default function LoginPage() {
                 className="w-full !pl-10"
               />
             </div>
+            
+            <div className="flex justify-end">
+              <Link href="/forgot-password" className="text-xs text-text-muted hover:text-white transition-colors">
+                Forgot Password?
+              </Link>
+            </div>
+
             <motion.button
               type="submit"
               disabled={loading}

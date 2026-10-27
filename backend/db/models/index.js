@@ -1,3 +1,4 @@
+const SystemSetting = require('./SystemSetting');
 const User = require('./User');
 const Wallet = require('./Wallet');
 const Transaction = require('./Transaction');
@@ -8,6 +9,9 @@ const TeamCreator = require('./TeamCreator');
 const CreatorStatsSnapshot = require('./CreatorStatsSnapshot');
 const Score = require('./Score');
 const Leaderboard = require('./Leaderboard');
+const Notification = require('./Notification');
+const Contest = require('./Contest');
+const ContestParticipant = require('./ContestParticipant');
 
 // ─── Associations ───
 
@@ -71,7 +75,24 @@ Leaderboard.belongsTo(Team, { foreignKey: 'team_id' });
 User.hasMany(Leaderboard, { foreignKey: 'user_id' });
 Leaderboard.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// Tournament <-> Contest
+Tournament.hasMany(Contest, { foreignKey: 'tournament_id', as: 'contests' });
+Contest.belongsTo(Tournament, { foreignKey: 'tournament_id' });
+
+// Contest <-> ContestParticipant
+Contest.hasMany(ContestParticipant, { foreignKey: 'contest_id', as: 'participants' });
+ContestParticipant.belongsTo(Contest, { foreignKey: 'contest_id' });
+
+// User <-> ContestParticipant
+User.hasMany(ContestParticipant, { foreignKey: 'user_id' });
+ContestParticipant.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// Team <-> ContestParticipant
+Team.hasMany(ContestParticipant, { foreignKey: 'team_id', as: 'contestEntries' });
+ContestParticipant.belongsTo(Team, { foreignKey: 'team_id', as: 'team' });
+
 module.exports = {
+  SystemSetting,
   User,
   Wallet,
   Transaction,
@@ -82,4 +103,7 @@ module.exports = {
   CreatorStatsSnapshot,
   Score,
   Leaderboard,
+  Notification,
+  Contest,
+  ContestParticipant,
 };

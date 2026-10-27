@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { useAuth } from '../../lib/auth-context';
-import { apiGet, apiPost } from '../../lib/api';
+import { useAuth } from '../lib/auth-context';
+import { apiGet, apiPost } from '../lib/api';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Trophy, Clock, Users, Coins, ArrowRight, Video, Camera } from 'lucide-react';
+import { Trophy, Clock, Users, Coins, ArrowRight, Video } from 'lucide-react';
 
 interface Tournament {
   id: string;
@@ -45,8 +45,7 @@ function CountdownTimer({ targetDate }: { targetDate: string }) {
   return <span>{timeLeft}</span>;
 }
 
-export default function TournamentListPage({ params }: { params: Promise<{ platform: string }> }) {
-  const { platform } = use(params);
+export default function TournamentListPage() {
   const { token } = useAuth();
   const router = useRouter();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -54,19 +53,17 @@ export default function TournamentListPage({ params }: { params: Promise<{ platf
 
   useEffect(() => {
     if (token) {
-      apiGet(`/tournaments?platform=${platform}`, token)
+      apiGet(`/tournaments`, token)
         .then(data => setTournaments(data))
         .catch(() => {})
         .finally(() => setLoading(false));
     }
-  }, [token, platform]);
+  }, [token]);
 
   const handleJoin = (tournamentId: string) => {
     router.push(`/team-builder/${tournamentId}`);
   };
 
-  const PlatformIcon = platform === 'youtube' ? Video : Camera;
-  const platformLabel = platform === 'youtube' ? 'YouTube' : 'Instagram';
   const durationLabels: Record<string, string> = {
     '24h': '24-Hour Sprint',
     '2d': '2-Day Challenge',
@@ -81,10 +78,10 @@ export default function TournamentListPage({ params }: { params: Promise<{ platf
         className="mb-8"
       >
         <div className="flex items-center gap-3 mb-2">
-          <PlatformIcon size={28} className={platform === 'youtube' ? 'text-red-500' : 'text-pink-500'} />
-          <h1 className="text-3xl font-bold">{platformLabel} League</h1>
+          <Trophy size={28} className="text-neon-gold" />
+          <h1 className="text-3xl font-bold">YouTube Battle Leagues</h1>
         </div>
-        <p className="text-text-secondary">Join a tournament and build your fantasy creator team</p>
+        <p className="text-text-secondary">Join an active YouTube tournament and build your fantasy creator team</p>
       </motion.div>
 
       {loading ? (
@@ -114,7 +111,10 @@ export default function TournamentListPage({ params }: { params: Promise<{ platf
                 </span>
               </div>
 
-              <h3 className="text-lg font-bold mb-4">{t.name}</h3>
+              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <Video size={18} className="text-red-500" />
+                {t.name}
+              </h3>
 
               {/* Stats */}
               <div className="space-y-3 mb-6 flex-1">
@@ -122,13 +122,13 @@ export default function TournamentListPage({ params }: { params: Promise<{ platf
                   <span className="text-sm text-text-secondary flex items-center gap-2">
                     <Coins size={14} className="text-neon-gold" /> Entry Fee
                   </span>
-                  <span className="text-sm font-bold">₹{parseFloat(t.entry_fee).toLocaleString()}</span>
+                  <span className="text-sm font-bold">{parseFloat(t.entry_fee).toFixed(0)} USDT</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-text-secondary flex items-center gap-2">
                     <Trophy size={14} className="text-neon-cyan" /> Prize Pool
                   </span>
-                  <span className="text-sm font-bold text-neon-cyan">₹{parseFloat(t.prize_pool).toLocaleString()}</span>
+                  <span className="text-sm font-bold text-neon-cyan">{parseFloat(t.prize_pool).toLocaleString()} USDT</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-text-secondary flex items-center gap-2">

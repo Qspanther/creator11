@@ -8,9 +8,9 @@ require('dotenv').config();
 const config = {
   // ─── Team & Category Rules ───
   CATEGORIES: ["Gaming", "Vlogging", "Comedy", "Tech", "Lifestyle"],
-  CREATORS_PER_CATEGORY: 2,
-  TOTAL_TEAM_SIZE: 10,  // Must equal CATEGORIES.length * CREATORS_PER_CATEGORY
-  TOTAL_CREDITS: 100,
+  CREATORS_PER_CATEGORY: 3,
+  TOTAL_TEAM_SIZE: 11,  // Hard requirement for a valid fantasy team
+  TOTAL_CREDITS: 110,
 
   // ─── Multipliers ───
   CAPTAIN_MULTIPLIER: 2.0,
@@ -97,10 +97,10 @@ const config = {
   INITIAL_WALLET_BALANCE: 500,
 };
 
-// Computed validation
-if (config.CATEGORIES.length * config.CREATORS_PER_CATEGORY !== config.TOTAL_TEAM_SIZE) {
+// Computed validation (Relaxed to allow fewer total players than max possible)
+if (config.CATEGORIES.length * config.CREATORS_PER_CATEGORY < config.TOTAL_TEAM_SIZE) {
   throw new Error(
-    `Config error: CATEGORIES(${config.CATEGORIES.length}) × CREATORS_PER_CATEGORY(${config.CREATORS_PER_CATEGORY}) must equal TOTAL_TEAM_SIZE(${config.TOTAL_TEAM_SIZE})`
+    `Config error: Not enough possible creators to form a team of ${config.TOTAL_TEAM_SIZE}`
   );
 }
 

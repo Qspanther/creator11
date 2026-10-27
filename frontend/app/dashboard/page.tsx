@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth-context';
 import { apiGet } from '../lib/api';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { Video, Camera, Trophy, Users, TrendingUp, Wallet } from 'lucide-react';
+import { Video, Trophy, Users, TrendingUp, Wallet } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user, token } = useAuth();
@@ -29,15 +29,7 @@ export default function DashboardPage() {
       description: 'Compete with YouTube creators. Track views, subscribers, and growth.',
       creators: '25 Creators',
     },
-    {
-      platform: 'instagram',
-      title: 'Instagram League',
-      icon: Camera,
-      color: 'from-pink-500 to-purple-500',
-      glowColor: 'rgba(236, 72, 153, 0.15)',
-      description: 'Compete with Instagram creators. Track likes, followers, and engagement.',
-      creators: '25 Creators',
-    },
+    
   ];
 
   return (
@@ -55,7 +47,7 @@ export default function DashboardPage() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
         {[
-          { label: 'Wallet Balance', value: `₹${balance.toLocaleString()}`, icon: Wallet, color: 'text-neon-gold' },
+          { label: 'Wallet Balance', value: `${balance.toLocaleString()}`, icon: Wallet, color: 'text-neon-gold' },
           { label: 'Your Teams', value: stats.totalTeams.toString(), icon: Users, color: 'text-neon-purple' },
           { label: 'Win Rate', value: '—', icon: TrendingUp, color: 'text-neon-cyan' },
         ].map((s, i) => (
@@ -81,9 +73,9 @@ export default function DashboardPage() {
       <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
         <Trophy size={20} className="text-neon-purple" /> Choose Your League
       </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-1 max-w-2xl gap-6">
         {departments.map((dept, i) => (
-          <Link key={dept.platform} href={`/tournaments/${dept.platform}`}>
+          <Link key={dept.platform} href={`/platform/${dept.platform}`}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}

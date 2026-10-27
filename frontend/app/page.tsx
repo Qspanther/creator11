@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Trophy, Users, Zap, ArrowRight, Video, Camera, Star, TrendingUp } from 'lucide-react';
@@ -8,14 +9,14 @@ import { useAuth } from './lib/auth-context';
 const features = [
   { icon: Users, title: 'Draft Creators', desc: 'Pick your dream team of 10 creators across 5 categories' },
   { icon: TrendingUp, title: 'Real Performance', desc: 'Points based on actual 24h views, likes, and follower growth' },
-  { icon: Trophy, title: 'Win Prizes', desc: 'Top teams split the prize pool — ₹5K to ₹30K per tournament' },
+  { icon: Trophy, title: 'Win Prizes', desc: 'Top teams split the prize pool — 500 to 5,000 USDT per Battle League' },
 ];
 
 const trendingCreators = [
   { name: 'NovaBlade Gaming', platform: 'youtube', category: 'Gaming', growth: '+12.4%' },
-  { name: 'MemeLordOfficial', platform: 'instagram', category: 'Comedy', growth: '+18.7%' },
+  { name: 'CarryMinati Gaming', platform: 'youtube', category: 'Gaming', growth: '+18.7%' },
   { name: 'ByteReview', platform: 'youtube', category: 'Tech', growth: '+9.2%' },
-  { name: 'GlowUpDaily', platform: 'instagram', category: 'Lifestyle', growth: '+15.1%' },
+  { name: 'Flying Beast Vlogs', platform: 'youtube', category: 'Vlogging', growth: '+15.1%' },
 ];
 
 export default function HomePage() {
@@ -85,7 +86,7 @@ export default function HomePage() {
             Fantasy Sports<br />for Creators
           </h1>
           <p className="text-lg text-text-secondary max-w-xl mx-auto mb-8 leading-relaxed">
-            Draft your dream team of YouTube & Instagram creators. Compete in tournaments where real creator performance determines your score.
+            Draft your dream team of top YouTube creators. Compete in tournaments where real creator performance determines your score.
           </p>
 
           <div className="flex items-center justify-center gap-4">
@@ -131,13 +132,13 @@ export default function HomePage() {
           transition={{ delay: 0.6, duration: 0.5 }}
           className="flex items-center gap-8 mt-16"
         >
-          <div className="flex items-center gap-2 text-text-muted">
-            <Video size={20} className="text-red-500" /> YouTube League
-          </div>
-          <div className="w-px h-6 bg-white/10" />
-          <div className="flex items-center gap-2 text-text-muted">
-            <Camera size={20} className="text-pink-500" /> Instagram League
-          </div>
+          <Link href="/platform/youtube">
+            <motion.div whileHover={{ scale: 1.05 }} className="flex items-center gap-2 text-text-muted hover:text-white transition-colors cursor-pointer glass px-4 py-2 rounded-xl">
+              <Video size={20} className="text-red-500" /> YouTube League
+            </motion.div>
+          </Link>
+          
+          
         </motion.div>
       </section>
 
@@ -193,7 +194,7 @@ export default function HomePage() {
                   <div>
                     <p className="text-sm font-semibold">{c.name}</p>
                     <p className="text-xs text-text-muted flex items-center gap-1">
-                      {c.platform === 'youtube' ? <Video size={10} className="text-red-500" /> : <Camera size={10} className="text-pink-500" />}
+                      <Video size={10} className="text-red-500" />
                       {c.category}
                     </p>
                   </div>

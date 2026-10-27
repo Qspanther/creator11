@@ -10,10 +10,13 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: config.FRONTEND_URL,
+  origin: true,
   credentials: true,
 }));
 app.use(express.json());
+
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Request logging
 app.use((req, res, next) => {
@@ -29,6 +32,9 @@ app.use('/creators', require('./routes/creators'));
 app.use('/teams', require('./routes/teams'));
 app.use('/wallet', require('./routes/wallet'));
 app.use('/leaderboard', require('./routes/leaderboard'));
+app.use('/admin', require('./routes/admin'));
+app.use('/notifications', require('./routes/notifications'));
+app.use('/contests', require('./routes/contests'));
 
 // Health check
 app.get('/health', (req, res) => {

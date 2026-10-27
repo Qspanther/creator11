@@ -5,12 +5,13 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Home, LayoutDashboard, Trophy, Users, Shield,
-  Wallet, Settings, Gamepad2
+  Wallet, Settings, Gamepad2, ShieldAlert
 } from 'lucide-react';
+import { useAuth } from '../../lib/auth-context';
 
 const navItems = [
   { href: '/dashboard', label: 'Home', icon: Home },
-  { href: '/tournaments/youtube', label: 'Tournaments', icon: Trophy },
+  { href: '/tournaments', label: 'Tournaments', icon: Trophy },
   { href: '/creators', label: 'Creators', icon: Users },
   { href: '/my-teams', label: 'My Teams', icon: Shield },
   { href: '/wallet', label: 'Wallet', icon: Wallet },
@@ -19,6 +20,7 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   return (
     <aside className="glass-sidebar fixed left-0 top-0 h-full w-[220px] z-40 flex flex-col py-6">
@@ -65,9 +67,23 @@ export default function Sidebar() {
             </Link>
           );
         })}
+        {/* Admin Link for Admins Only */}
+        {user?.role === 'admin' && (
+          <div className="px-6 mt-4 pt-4 border-t border-white/5">
+            <Link
+              href="/admin"
+              className="group flex flex-col gap-1 px-4 py-3 rounded-xl transition-all duration-300 relative overflow-hidden text-neon-cyan hover:bg-neon-cyan/10"
+            >
+              <div className="flex items-center gap-3 relative z-10">
+                <ShieldAlert size={20} className="text-neon-cyan" />
+                <span className="font-medium tracking-wide">Admin Panel</span>
+              </div>
+            </Link>
+          </div>
+        )}
       </nav>
 
-      {/* Version */}
+      {/* User Mini Profile */}
       <div className="px-6 mt-auto">
         <p className="text-[10px] text-text-muted tracking-wider">v1.0.0 • BETA</p>
       </div>

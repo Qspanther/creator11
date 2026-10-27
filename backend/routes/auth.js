@@ -100,6 +100,7 @@ router.post('/verify-otp', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -153,6 +154,7 @@ router.post('/login', async (req, res) => {
         name: user.name,
         email: user.email,
         kycStatus: user.kyc_status,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -179,9 +181,105 @@ router.get('/me', async (req, res) => {
       phone: user.phone,
       kycStatus: user.kyc_status,
       otpVerified: user.otp_verified,
+      role: user.role,
     });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });
+  }
+});
+
+// POST /auth/forgot-password
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const otp_code = String(Math.floor(100000 + Math.random() * 900000));
+    const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
+    
+    await user.update({ otp_code, otp_expires_at });
+    console.log(`📧 MOCK RESET OTP for ${email}: ${otp_code}`);
+
+    res.json({ message: 'OTP sent', mockOtp: otp_code });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (user.otp_code !== otp || new Date() > new Date(user.otp_expires_at)) {
+      return res.status(400).json({ error: 'Invalid or expired OTP' });
+    }
+
+    const password_hash = await bcrypt.hash(newPassword, 10);
+    await user.update({ password_hash, otp_code: null });
+
+    res.json({ message: 'Password reset successful' });
+  } catch (error) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /auth/change-password (Requires Auth)
+router.put('/change-password', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'No token' });
+    
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, config.JWT_SECRET);
+    
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+
+    const user = await User.findByPk(decoded.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!validPassword) return res.status(401).json({ error: 'Incorrect current password' });
+
+    const password_hash = await bcrypt.hash(newPassword, 10);
+    await user.update({ password_hash });
+
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    res.status(401).json({ error: 'Unauthorized or error changing password' });
+  }
+});
+
+// PUT /auth/change-email (Requires Auth)
+router.put('/change-email', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) return res.status(401).json({ error: 'No token' });
+    
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, config.JWT_SECRET);
+    
+    const { newEmail } = req.body;
+    if (!newEmail) return res.status(400).json({ error: 'Missing email' });
+
+    const existing = await User.findOne({ where: { email: newEmail } });
+    if (existing) return res.status(409).json({ error: 'Email already in use' });
+
+    const user = await User.findByPk(decoded.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    await user.update({ email: newEmail });
+    res.json({ message: 'Email changed successfully' });
+  } catch (error) {
+    res.status(401).json({ error: 'Unauthorized or error changing email' });
   }
 });
 

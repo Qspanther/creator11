@@ -4,8 +4,8 @@ import ClientLayout from "./client-layout";
 
 export const metadata: Metadata = {
   title: "Creator11 — Fantasy Sports for Content Creators",
-  description: "Build your fantasy team of YouTube & Instagram creators. Compete in tournaments, earn points from real creator performance, and win prizes.",
-  keywords: "fantasy sports, youtube creators, instagram creators, content creator league",
+  description: "Build your fantasy team of verified YouTube creators. Compete in tournaments, earn points from real creator performance, and win prizes.",
+  keywords: "fantasy sports, youtube creators, content creator league, creator11",
 };
 
 export default function RootLayout({

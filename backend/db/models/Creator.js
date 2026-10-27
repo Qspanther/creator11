@@ -33,6 +33,11 @@ const Creator = sequelize.define('Creator', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  profile_url: {
+    // Direct link to their profile
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   // Base stats for mock data generation
   base_views: {
     type: DataTypes.INTEGER,

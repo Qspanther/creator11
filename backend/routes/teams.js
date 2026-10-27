@@ -51,8 +51,8 @@ async function validateTeam(creatorIds, captainId, viceCaptainId, tournamentPlat
 
   for (const category of config.CATEGORIES) {
     const count = categoryCounts[category] || 0;
-    if (count !== config.CREATORS_PER_CATEGORY) {
-      errors.push(`Category "${category}" must have exactly ${config.CREATORS_PER_CATEGORY} creators, got ${count}`);
+    if (count > config.CREATORS_PER_CATEGORY) {
+      errors.push(`Category "${category}" can have at most ${config.CREATORS_PER_CATEGORY} creators, got ${count}`);
     }
   }
 
@@ -121,7 +121,7 @@ router.post('/', authenticate, async (req, res) => {
 
       if (balance < entryFee) {
         await t.rollback();
-        return res.status(400).json({ error: `Insufficient balance. Need ₹${entryFee}, have ₹${balance}` });
+        return res.status(400).json({ error: `Insufficient balance. Need ${entryFee} USDT, have ${balance} USDT` });
       }
 
       // Deduct entry fee

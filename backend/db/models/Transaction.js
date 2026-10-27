@@ -21,12 +21,25 @@ const Transaction = sequelize.define('Transaction', {
     allowNull: false,
   },
   status: {
-    // completed | pending | failed
+    // completed | pending | rejected | failed
     type: DataTypes.STRING,
     defaultValue: 'completed',
   },
   reference_tournament_id: {
     type: DataTypes.UUID,
+    allowNull: true,
+  },
+  network: {
+    // TRC20 | BEP20 | ERC20
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  txid: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  wallet_address: {
+    type: DataTypes.STRING,
     allowNull: true,
   },
   description: {

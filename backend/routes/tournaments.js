@@ -10,7 +10,8 @@ router.get('/', authenticate, async (req, res) => {
   try {
     const { platform, status } = req.query;
     const where = {};
-    if (platform) where.platform = platform;
+    if (platform && platform !== "all") where.platform = platform;
+    else if (!platform) where.platform = "youtube";
     if (status) where.status = status;
 
     const tournaments = await Tournament.findAll({
@@ -35,6 +36,21 @@ router.get('/:id', authenticate, async (req, res) => {
     res.json(tournament);
   } catch (error) {
     console.error('Error fetching tournament:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /tournaments/:id/contests — Get contests for a match
+router.get('/:id/contests', authenticate, async (req, res) => {
+  try {
+    const { Contest } = require('../db/models');
+    const contests = await Contest.findAll({
+      where: { tournament_id: req.params.id },
+      order: [['entry_fee', 'DESC']]
+    });
+    res.json(contests);
+  } catch (error) {
+    console.error('Error fetching contests:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

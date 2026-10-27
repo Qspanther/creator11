@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
@@ -7,6 +7,7 @@ interface User {
   name: string;
   email: string;
   kycStatus?: string;
+  role?: string;
 }
 
 interface AuthContextType {
@@ -27,7 +28,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
 });
 
-const API_BASE = 'http://localhost:5000';
+const API_BASE = '/api-backend';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -82,3 +83,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
+

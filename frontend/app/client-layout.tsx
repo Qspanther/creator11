@@ -4,30 +4,36 @@ import { ReactNode, Suspense, lazy, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import Sidebar from './components/layout/Sidebar';
+import AdminSidebar from './components/layout/AdminSidebar';
 import TopBar from './components/layout/TopBar';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Lazy load 3D background for performance
 const ParticleBackground = lazy(() => import('./components/three/ParticleBackground'));
 
-const publicPaths = ['/', '/login', '/signup', '/verify-otp'];
+const publicPaths = ['/', '/login', '/signup', '/verify-otp', '/forgot-password'];
 
 function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const isPublicPage = publicPaths.includes(pathname);
   const showAppShell = isAuthenticated && !isPublicPage;
+  const isAdminRoute = pathname.startsWith('/admin');
 
   useEffect(() => {
     if (!loading) {
       if (!isAuthenticated && !isPublicPage) {
         router.push('/login');
       } else if (isAuthenticated && isPublicPage) {
+        // If they are an admin, dashboard could be regular or admin, but let's default to regular dashboard for now unless they click admin panel
+        router.push('/dashboard');
+      }
+      if (isAdminRoute && user?.role !== 'admin') {
         router.push('/dashboard');
       }
     }
-  }, [loading, isAuthenticated, isPublicPage, router]);
+  }, [loading, isAuthenticated, isPublicPage, isAdminRoute, user, router]);
 
   if (loading && !isPublicPage) {
     return (
@@ -46,7 +52,7 @@ function AppShell({ children }: { children: ReactNode }) {
 
       {showAppShell ? (
         <div className="flex min-h-screen">
-          <Sidebar />
+          {isAdminRoute ? <AdminSidebar /> : <Sidebar />}
           <div className="flex-1 ml-[220px]">
             <TopBar />
             <main className="pt-20 px-6 pb-8 relative z-10">

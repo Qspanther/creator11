@@ -360,13 +360,6 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
                       )}
                     </div>
 
-                    {/* Email preview for search transparency */}
-                    {entry.userEmail && (
-                      <p className="text-[11px] text-text-muted truncate mt-0.5">
-                        {entry.userEmail}
-                      </p>
-                    )}
-
                     {showRankings && entry.prizeAmount > 0 && (
                       <p className="text-[11px] font-bold text-neon-gold mt-0.5">
                         +{entry.prizeAmount.toLocaleString()} USDT Won

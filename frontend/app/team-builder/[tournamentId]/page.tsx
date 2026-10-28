@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Crown, Star, Check, X, Search,
   Coins, Users, ArrowRight, Info, ExternalLink,
-  Flame, Sparkles, TrendingUp, Eye, Heart, Tv, Camera
+  Flame, Sparkles, TrendingUp, Eye, Heart, Tv, Camera, Lock as LockIcon
 } from 'lucide-react';
 
 interface Creator {
@@ -556,7 +556,7 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
                                 : 'bg-white/[0.02] text-text-muted cursor-not-allowed opacity-50'
                           }`}
                         >
-                          {isSelected ? <Check size={18} /> : isCategoryLocked ? <Lock size={14} className="text-text-muted" /> : '+'}
+                          {isSelected ? <Check size={18} /> : isCategoryLocked ? <LockIcon size={14} className="text-text-muted" /> : '+'}
                         </button>
                       </div>
                     </div>

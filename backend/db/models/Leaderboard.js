@@ -27,6 +27,10 @@ const Leaderboard = sequelize.define('Leaderboard', {
     type: DataTypes.INTEGER,
     allowNull: true,
   },
+  prize_amount: {
+    type: DataTypes.DECIMAL(12, 2),
+    defaultValue: 0,
+  },
 }, {
   tableName: 'leaderboard',
 });

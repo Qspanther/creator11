@@ -5,7 +5,8 @@ import { useAuth } from '../lib/auth-context';
 import { apiGet } from '../lib/api';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { Shield, Crown, Star, Trophy, Clock, Edit, BarChart } from 'lucide-react';
+import { Shield, Crown, Star, Trophy, Clock, Edit, BarChart, TrendingUp, Eye } from 'lucide-react';
+import ScorecardModal from '../components/ScorecardModal';
 
 function CountdownTimer({ targetDate }: { targetDate: string }) {
   const [timeLeft, setTimeLeft] = useState('');
@@ -43,6 +44,7 @@ interface TeamItem {
     status: string;
     lock_time: string;
     start_time: string;
+    end_time: string;
   };
   teamCreators: Array<{
     creator_id: string;
@@ -60,6 +62,7 @@ export default function MyTeamsPage() {
   const { token } = useAuth();
   const [teams, setTeams] = useState<TeamItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedScorecardTeamId, setSelectedScorecardTeamId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -102,7 +105,7 @@ export default function MyTeamsPage() {
           My Fantasy Battle Teams
         </h1>
         <p className="text-sm text-text-secondary mt-1">
-          Track, modify lineups before lock time, or view live standings in battle leagues
+          Track live delta scores, inspect video growth metrics, or check final leaderboard standings
         </p>
       </motion.div>
 
@@ -111,7 +114,7 @@ export default function MyTeamsPage() {
           <Shield size={48} className="mx-auto text-text-muted mb-4 opacity-40" />
           <h3 className="text-lg font-bold text-white mb-2">No Teams Formed Yet</h3>
           <p className="text-text-secondary text-sm mb-6 max-w-md mx-auto">
-            Join one of the 4 active Battle Leagues (6h, 24h, 48h, 72h) and pick your 11 creator lineup to win USDT prize pools!
+            Join one of the active Battle Leagues (6h, 24h, 48h, 72h) and pick your 11 creator lineup to win USDT prize pools!
           </p>
           <Link href="/tournaments">
             <motion.button
@@ -127,6 +130,7 @@ export default function MyTeamsPage() {
           {teams.map((team, i) => {
             const isEditable = team.Tournament.status === 'upcoming' && !team.is_locked;
             const isLive = team.Tournament.status === 'live';
+            const isCompleted = team.Tournament.status === 'completed';
 
             return (
               <motion.div
@@ -149,7 +153,7 @@ export default function MyTeamsPage() {
                         {team.Tournament.status.toUpperCase()}
                       </span>
                       <span className="text-xs text-text-muted">
-                        Credits: {parseFloat(team.total_credits_used).toFixed(1)} / 110
+                        Credits: {parseFloat(team.total_credits_used).toFixed(1)} / 125
                       </span>
                       {isEditable && (
                         <span className="text-xs text-neon-gold flex items-center gap-1 font-bold">
@@ -159,7 +163,19 @@ export default function MyTeamsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Live Scorecard Button */}
+                    {(isLive || isCompleted) && (
+                      <button
+                        onClick={() => setSelectedScorecardTeamId(team.id)}
+                        className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-gradient-to-r from-neon-purple to-neon-cyan text-white hover:brightness-110 rounded-xl transition-all cursor-pointer shadow-lg shadow-neon-purple/20"
+                      >
+                        <TrendingUp size={13} />
+                        {isLive ? 'Live Scorecard' : 'Final Scorecard'}
+                      </button>
+                    )}
+
+                    {/* Edit Lineup (before lock) */}
                     {isEditable && (
                       <Link href={`/team-builder/${team.tournament_id}`}>
                         <button className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-white/[0.05] hover:bg-neon-cyan hover:text-black rounded-xl text-neon-cyan transition-colors cursor-pointer border border-white/10">
@@ -167,10 +183,12 @@ export default function MyTeamsPage() {
                         </button>
                       </Link>
                     )}
-                    {isLive && (
+
+                    {/* Leaderboard Button */}
+                    {(isLive || isCompleted) && (
                       <Link href={`/leaderboard/${team.tournament_id}`}>
                         <button className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-neon-gold/10 hover:bg-neon-gold hover:text-black rounded-xl text-neon-gold transition-colors cursor-pointer border border-neon-gold/30">
-                          <BarChart size={12} /> Live Leaderboard
+                          <BarChart size={12} /> Leaderboard
                         </button>
                       </Link>
                     )}
@@ -224,6 +242,12 @@ export default function MyTeamsPage() {
           })}
         </div>
       )}
+
+      {/* Transparent Scorecard Modal */}
+      <ScorecardModal
+        teamId={selectedScorecardTeamId}
+        onClose={() => setSelectedScorecardTeamId(null)}
+      />
     </div>
   );
 }

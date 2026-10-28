@@ -275,23 +275,166 @@ def update_creators_in_db(results):
         if r['changed']:
             updated_count += 1
 
-    # Check for live tournaments and update snapshots
-    cursor.execute("SELECT id FROM tournaments WHERE status = 'live' AND platform = 'youtube'")
-    live_tournaments = cursor.fetchall()
-
-    if live_tournaments:
-        for t in live_tournaments:
-            t_id = t['id']
-            for r in results:
-                # Update or insert end snapshot for live scoring
-                cursor.execute("""
-                    INSERT INTO creator_stats_snapshots (id, creator_id, tournament_id, snapshot_type, views, likes, followers, captured_at, created_at, updated_at)
-                    VALUES (lower(hex(randomblob(16))), ?, ?, 'end', ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """, (r['id'], t_id, r['views'], r['likes'], r['subscribers']))
+    # Synchronize snapshots and live scores for tournaments
+    sync_tournament_scoring(cursor, results)
 
     conn.commit()
     conn.close()
     return updated_count
+
+def sync_tournament_scoring(cursor, results):
+    """
+    Synchronizes snapshots and live scoring for tournaments:
+    • Tracks growth strictly between Contest Start Time and Contest End Time
+    • 1000 views gained = 1 pt (diff / 1000)
+    • 500 likes gained = 1 pt (diff / 500)
+    • 100 subscribers gained = 1 pt (diff / 100)
+    • Captain (2.0x), Vice-Captain (1.5x)
+    • Zero duplicate snapshots (upsert pattern)
+    """
+    results_map = {r['id']: r for r in results}
+
+    # 1. State transitions based on exact contest window
+    cursor.execute("""
+        UPDATE tournaments
+        SET status = 'live', updated_at = CURRENT_TIMESTAMP
+        WHERE status IN ('upcoming', 'locked')
+          AND start_time <= CURRENT_TIMESTAMP
+          AND end_time > CURRENT_TIMESTAMP
+    """)
+
+    cursor.execute("""
+        UPDATE tournaments
+        SET status = 'completed', updated_at = CURRENT_TIMESTAMP
+        WHERE status = 'live'
+          AND end_time <= CURRENT_TIMESTAMP
+    """)
+
+    # 2. Get tournaments that are live or completed
+    cursor.execute("""
+        SELECT id, name, prize_pool, status, start_time, end_time
+        FROM tournaments
+        WHERE platform = 'youtube' AND status IN ('live', 'completed')
+    """)
+    tournaments = cursor.fetchall()
+
+    for t in tournaments:
+        t_id = t['id']
+        prize_pool = float(t['prize_pool']) if t['prize_pool'] else 0.0
+
+        # Fetch / create start snapshots for baseline
+        start_snaps = {}
+        for r in results:
+            cursor.execute("""
+                SELECT views, likes, followers
+                FROM creator_stats_snapshots
+                WHERE tournament_id = ? AND creator_id = ? AND snapshot_type = 'start'
+            """, (t_id, r['id']))
+            s_row = cursor.fetchone()
+
+            if not s_row:
+                # Capture baseline start snapshot at contest launch
+                cursor.execute("""
+                    INSERT INTO creator_stats_snapshots
+                    (id, creator_id, tournament_id, snapshot_type, views, likes, followers, video_title, video_url, is_pre_contest, captured_at, created_at, updated_at)
+                    VALUES (lower(hex(randomblob(16))), ?, ?, 'start', ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, (r['id'], t_id, r['views'], r['likes'], r['subscribers'], r['video_title'], r['video_url']))
+                start_snaps[r['id']] = {
+                    'views': r['views'],
+                    'likes': r['likes'],
+                    'subs': r['subscribers'],
+                }
+            else:
+                start_snaps[r['id']] = {
+                    'views': s_row[0],
+                    'likes': s_row[1],
+                    'subs': s_row[2],
+                }
+
+            # Upsert current / end snapshot
+            cursor.execute("""
+                INSERT INTO creator_stats_snapshots
+                (id, creator_id, tournament_id, snapshot_type, views, likes, followers, video_title, video_url, is_pre_contest, captured_at, created_at, updated_at)
+                VALUES (lower(hex(randomblob(16))), ?, ?, 'end', ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ON CONFLICT(creator_id, tournament_id, snapshot_type) DO UPDATE SET
+                    views = excluded.views,
+                    likes = excluded.likes,
+                    followers = excluded.followers,
+                    video_title = excluded.video_title,
+                    video_url = excluded.video_url,
+                    captured_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (r['id'], t_id, r['views'], r['likes'], r['subscribers'], r['video_title'], r['video_url']))
+
+        # Recalculate team scores and leaderboard
+        cursor.execute("SELECT id, user_id, captain_creator_id, vice_captain_creator_id FROM teams WHERE tournament_id = ?", (t_id,))
+        teams = cursor.fetchall()
+        if not teams:
+            continue
+
+        team_leaderboard = []
+        for team in teams:
+            team_id = team['id']
+            user_id = team['user_id']
+            captain_id = team['captain_creator_id']
+            vc_id = team['vice_captain_creator_id']
+
+            cursor.execute("SELECT creator_id FROM team_creators WHERE team_id = ?", (team_id,))
+            team_creators = cursor.fetchall()
+
+            team_total_points = 0.0
+            for tc in team_creators:
+                c_id = tc['creator_id']
+                start = start_snaps.get(c_id, {'views': 0, 'likes': 0, 'subs': 0})
+                current = results_map.get(c_id, {'views': 0, 'likes': 0, 'subscribers': 0})
+
+                diff_views = max(0, current['views'] - start['views'])
+                diff_likes = max(0, current['likes'] - start['likes'])
+                diff_subs = max(0, current['subscribers'] - start['subs'])
+
+                raw_pts = (diff_views / 1000.0) + (diff_likes / 500.0) + (diff_subs / 100.0)
+
+                mult = 1.0
+                if c_id == captain_id:
+                    mult = 2.0
+                elif c_id == vc_id:
+                    mult = 1.5
+
+                creator_pts = round(raw_pts * mult, 4)
+                team_total_points += creator_pts
+
+            team_leaderboard.append({
+                'team_id': team_id,
+                'user_id': user_id,
+                'total_points': round(team_total_points, 4)
+            })
+
+        # Sort leaderboard descending
+        team_leaderboard.sort(key=lambda x: x['total_points'], reverse=True)
+        total_p = len(team_leaderboard)
+
+        # Update leaderboard table
+        cursor.execute("DELETE FROM leaderboard WHERE tournament_id = ?", (t_id,))
+        for idx, entry in enumerate(team_leaderboard):
+            rank = idx + 1
+            prize = 0.0
+            if total_p > 0 and prize_pool > 0:
+                rank_pct = ((rank - 1) / total_p) * 100
+                if rank_pct < 1:
+                    prize = round((prize_pool * 0.30) / max(1, round(total_p * 0.01)), 2)
+                elif rank_pct < 5:
+                    prize = round((prize_pool * 0.25) / max(1, round(total_p * 0.04)), 2)
+                elif rank_pct < 10:
+                    prize = round((prize_pool * 0.15) / max(1, round(total_p * 0.05)), 2)
+                elif rank_pct < 25:
+                    prize = round((prize_pool * 0.10) / max(1, round(total_p * 0.15)), 2)
+                elif rank_pct < 50:
+                    prize = round((prize_pool * 0.05) / max(1, round(total_p * 0.25)), 2)
+
+            cursor.execute("""
+                INSERT INTO leaderboard (id, tournament_id, team_id, user_id, total_points, rank, prize_amount, created_at, updated_at)
+                VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """, (t_id, entry['team_id'], entry['user_id'], entry['total_points'], rank, prize))
 
 def run_sync_cycle(is_initial=False):
     """Run a single parallel sync cycle across all YouTube creators."""

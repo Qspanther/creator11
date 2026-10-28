@@ -24,11 +24,11 @@ function startScheduler() {
         where: {
           status: 'upcoming',
           lock_time: { [Op.lte]: now },
+          start_time: { [Op.gt]: now },
         },
       });
       for (const t of toLock) {
         await t.update({ status: 'locked' });
-        // Lock all teams for this tournament
         await Team.update({ is_locked: true }, { where: { tournament_id: t.id } });
         console.log(`🔒 Tournament locked: ${t.name}`);
       }
@@ -36,8 +36,9 @@ function startScheduler() {
       // 2. Start tournaments and take start snapshots
       const toStart = await Tournament.findAll({
         where: {
-          status: 'locked',
+          status: { [Op.in]: ['upcoming', 'locked'] },
           start_time: { [Op.lte]: now },
+          end_time: { [Op.gt]: now },
         },
       });
       for (const t of toStart) {
@@ -61,14 +62,11 @@ function startScheduler() {
       }
 
       // 4. Recalculate scores for live tournaments (every 5 minutes)
-      // ASSUMPTION: We recalculate every run for simplicity; in production,
-      // this would use a separate 5-minute cron
       if (now.getMinutes() % 5 === 0) {
         const liveTournaments = await Tournament.findAll({
           where: { status: 'live' },
         });
         for (const t of liveTournaments) {
-          // Take an interim "end" snapshot and recalculate
           await takeSnapshot(t.id, 'end');
           await calculateScores(t.id);
         }

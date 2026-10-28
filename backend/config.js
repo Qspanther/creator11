@@ -20,18 +20,24 @@ const config = {
   // ─── Tournament Timing ───
   LOCK_BEFORE_START_MINUTES: 30,
   TOURNAMENT_DURATIONS_HOURS: {
+    "6h": 6,
     "24h": 24,
     "2d": 48,
+    "48h": 48,
     "3d": 72,
+    "72h": 72,
   },
 
   // ─── Scoring Weights ───
-  // These convert raw metric diffs into meaningful decimal point scores.
-  // e.g., 25,487 views gained × 0.0001 = 2.5487 points
+  // 1000 views gained = 1 point (views * 0.001)
+  // 500 likes gained = 1 point (likes * 0.002)
+  // 100 subscribers gained = 1 point (subscribers * 0.01)
   SCORING_WEIGHTS: {
-    youtube_views: 0.0001,
-    instagram_likes: 0.0001,
-    instagram_followers: 0.0002,
+    youtube_views: 0.001,
+    youtube_likes: 0.002,
+    youtube_subscribers: 0.01,
+    instagram_likes: 0.002,
+    instagram_followers: 0.01,
   },
 
   // ─── Prize Distribution Slabs ───
@@ -48,15 +54,13 @@ const config = {
 
   // ─── Mock Data Toggle ───
   // Set to false and provide real API keys in env vars to use live data
-  USE_MOCK_CREATOR_DATA: true,
+  USE_MOCK_CREATOR_DATA: false,
 
   // ─── API Keys (from environment) ───
   YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
   INSTAGRAM_ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN || '',
 
   // ─── Database ───
-  // ASSUMPTION: Using SQLite for zero-setup local dev. Switch dialect to 'postgres'
-  // and update storage to a connection string for production PostgreSQL.
   DB_DIALECT: 'sqlite',
   DB_STORAGE: process.env.DB_STORAGE || './creator11.sqlite',
 
@@ -71,7 +75,6 @@ const config = {
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
 
   // ─── Mock Data Generation ───
-  // Controls how fast mock stats grow per hour for simulation
   MOCK_GROWTH_RATES: {
     youtube_views_per_hour: { min: 500, max: 5000 },
     instagram_likes_per_hour: { min: 100, max: 2000 },
@@ -83,11 +86,13 @@ const config = {
 
   // ─── Tournament Entry Fees & Prize Pools ───
   DEFAULT_ENTRY_FEES: {
+    "6h": 25,
     "24h": 50,
     "2d": 100,
     "3d": 200,
   },
   DEFAULT_PRIZE_POOLS: {
+    "6h": 2500,
     "24h": 5000,
     "2d": 15000,
     "3d": 30000,
@@ -97,7 +102,6 @@ const config = {
   INITIAL_WALLET_BALANCE: 500,
 };
 
-// Computed validation (Relaxed to allow fewer total players than max possible)
 if (config.CATEGORIES.length * config.CREATORS_PER_CATEGORY < config.TOTAL_TEAM_SIZE) {
   throw new Error(
     `Config error: Not enough possible creators to form a team of ${config.TOTAL_TEAM_SIZE}`

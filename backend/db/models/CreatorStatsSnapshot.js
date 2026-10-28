@@ -32,6 +32,18 @@ const CreatorStatsSnapshot = sequelize.define('CreatorStatsSnapshot', {
     type: DataTypes.BIGINT,
     defaultValue: 0,
   },
+  video_title: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  video_url: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  is_pre_contest: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
   captured_at: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

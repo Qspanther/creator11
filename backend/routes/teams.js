@@ -1,8 +1,9 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const config = require('../config');
-const { Team, TeamCreator, Creator, Tournament, Wallet, Transaction } = require('../db/models');
+const { Team, TeamCreator, Creator, Tournament, Wallet, Transaction, User } = require('../db/models');
 const sequelize = require('../db/index');
+const { getTeamScorecard } = require('../services/scoring-engine');
 
 const router = express.Router();
 
@@ -260,7 +261,40 @@ router.put('/:id', authenticate, async (req, res) => {
   }
 });
 
-// GET /teams/:id — Get team details
+// GET /teams/:id/score — Full transparent live scorecard for a team
+router.get('/:id/score', authenticate, async (req, res) => {
+  try {
+    const team = await Team.findByPk(req.params.id, {
+      include: [{ model: Tournament, as: 'Tournament' }],
+    });
+
+    if (!team) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const tournament = team.Tournament;
+    const isOwner = team.user_id === req.userId;
+    const canView = isOwner || tournament.status === 'completed' || tournament.status === 'live';
+
+    if (!canView) {
+      return res.status(403).json({
+        error: 'Team lineups and scorecards remain hidden until the tournament goes live to protect competitive tactics.',
+      });
+    }
+
+    const scorecard = await getTeamScorecard(team.id);
+    if (!scorecard) {
+      return res.status(404).json({ error: 'Scorecard could not be calculated' });
+    }
+
+    res.json(scorecard);
+  } catch (error) {
+    console.error('Get team scorecard error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /teams/:id — Get team details (allows viewing other users' teams once contest starts or completes)
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const team = await Team.findByPk(req.params.id, {
@@ -271,11 +305,21 @@ router.get('/:id', authenticate, async (req, res) => {
           include: [{ model: Creator, as: 'creator' }],
         },
         { model: Tournament, as: 'Tournament' },
+        { model: User, as: 'User', attributes: ['id', 'name'] },
       ],
     });
 
     if (!team) {
       return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const isOwner = team.user_id === req.userId;
+    const canView = isOwner || team.Tournament.status === 'completed' || team.Tournament.status === 'live';
+
+    if (!canView) {
+      return res.status(403).json({
+        error: 'Lineup hidden until tournament starts',
+      });
     }
 
     res.json(team);

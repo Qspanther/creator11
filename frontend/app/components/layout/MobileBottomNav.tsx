@@ -25,7 +25,7 @@ export default function MobileBottomNav() {
     { href: '/admin', label: 'Console', icon: Home },
     { href: '/admin/tournaments', label: 'Leagues', icon: Trophy },
     { href: '/admin/creators', label: 'Studio', icon: Users },
-    { href: '/admin/crypto', label: 'Crypto', icon: Wallet },
+    { href: '/admin/crypto', label: 'INR Gateway', icon: Wallet },
     { href: '/dashboard', label: 'Exit Admin', icon: ArrowLeft },
   ];
 

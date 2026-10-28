@@ -11,7 +11,7 @@ const navItems = [
   { href: '/admin', label: 'Console Overview', icon: Home },
   { href: '/admin/tournaments', label: '4 Battle Leagues', icon: Trophy },
   { href: '/admin/creators', label: 'Creator Studio', icon: Users },
-  { href: '/admin/crypto', label: 'USDT Crypto Gateway', icon: Wallet },
+  { href: '/admin/crypto', label: 'INR Payments & Gateway', icon: Wallet },
   { href: '/admin/formula', label: 'Points Formula', icon: Sliders },
   { href: '/admin/users', label: 'Player Management', icon: Shield },
 ];

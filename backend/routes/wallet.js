@@ -133,9 +133,12 @@ router.post('/deposit-request', authenticate, async (req, res) => {
   }
 });
 
-// POST /wallet/add-funds — Instant dev/testing mock INR deposit
+// POST /wallet/add-funds — Admin-only manual credit (disabled for normal users)
 router.post('/add-funds', authenticate, async (req, res) => {
   try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ error: 'Direct demo funding is disabled. Please add cash using UPI and submit your 12-digit UTR.' });
+    }
     const { amount, method = 'UPI' } = req.body;
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount <= 0) {

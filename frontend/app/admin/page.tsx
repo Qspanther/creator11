@@ -70,7 +70,14 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Link href="/admin/crypto">
+          <div className="glass-card p-6 hover:border-emerald-500/50 transition-colors cursor-pointer group">
+            <DollarSign className="text-emerald-400 mb-4" size={32} />
+            <h3 className="text-xl font-bold mb-2 group-hover:text-emerald-400 transition-colors">INR Payments & Gateway</h3>
+            <p className="text-text-secondary text-sm">Verify 12-digit UTR proofs, approve UPI deposits, and process player payouts.</p>
+          </div>
+        </Link>
         <Link href="/admin/tournaments">
           <div className="glass-card p-6 hover:border-neon-purple/50 transition-colors cursor-pointer group">
             <Trophy className="text-neon-purple mb-4" size={32} />

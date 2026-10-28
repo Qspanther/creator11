@@ -173,22 +173,6 @@ export default function WalletPage() {
     }
   };
 
-  // Instant Dev / Test Credit
-  const handleQuickAddTestCredit = async (amt: number = 500) => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      const res = await apiPost('/wallet/add-funds', { amount: amt, method: 'UPI' }, token);
-      setMessage({ type: 'success', text: `Instant test credit of ₹${amt.toLocaleString('en-IN')} added to your INR wallet!` });
-      if (res && typeof res.balance === 'number') setBalance(res.balance);
-      fetchData();
-    } catch (err: unknown) {
-      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to credit test funds' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Submit Withdrawal Request
   const handleWithdrawSubmit = async () => {
     const amt = parseFloat(withdrawAmount);
@@ -568,15 +552,6 @@ export default function WalletPage() {
                   >
                     {loading ? 'Submitting Proof...' : `Confirm Deposit of ₹${parseFloat(depositAmount || '0').toLocaleString('en-IN')}`}
                   </motion.button>
-
-                  {/* Fast Test Credit Button for smooth user experience */}
-                  <button
-                    type="button"
-                    onClick={() => handleQuickAddTestCredit(parseFloat(depositAmount) || 500)}
-                    className="px-4 py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 text-xs font-bold cursor-pointer transition-all"
-                  >
-                    ⚡ Instant Demo Credit
-                  </button>
                 </div>
               </div>
             </div>

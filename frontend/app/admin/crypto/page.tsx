@@ -3,79 +3,103 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth-context';
 import { apiGet, apiPost, apiPut } from '../../lib/api';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Wallet, CheckCircle, XCircle, Clock, Copy, Check,
-  ExternalLink, Save, RefreshCw, AlertCircle
+  ExternalLink, Save, RefreshCw, AlertCircle, Building2,
+  Smartphone, IndianRupee, User, ShieldCheck, ArrowDownLeft,
+  ArrowUpRight, QrCode
 } from 'lucide-react';
 
 interface DepositItem {
   id: string;
-  amount: string;
+  amount: string | number;
   network?: string;
   txid?: string;
+  wallet_address?: string;
   status: string;
   createdAt: string;
   description: string;
   Wallet?: {
-    balance: string;
+    balance: string | number;
     User?: {
       id: string;
       name: string;
       email: string;
+      phone?: string;
     };
   };
 }
 
 interface WithdrawalItem {
   id: string;
-  amount: string;
+  amount: string | number;
   network?: string;
   wallet_address?: string;
   status: string;
   createdAt: string;
+  description: string;
   Wallet?: {
-    balance: string;
+    balance: string | number;
     User?: {
       id: string;
       name: string;
       email: string;
+      phone?: string;
+      kyc_status?: string;
+      kyc_pan?: string;
     };
   };
 }
 
-export default function AdminCryptoControlPage() {
+interface InrSettings {
+  inr_upi_id: string;
+  inr_upi_name: string;
+  inr_bank_name: string;
+  inr_account_number: string;
+  inr_ifsc: string;
+  inr_account_name: string;
+}
+
+export default function AdminInrControlPage() {
   const { token } = useAuth();
-  
-  // Wallet addresses state
-  const [addresses, setAddresses] = useState({
-    TRC20: '',
-    BEP20: '',
-    ERC20: ''
+
+  // Official Gateway Accounts State
+  const [settings, setSettings] = useState<InrSettings>({
+    inr_upi_id: 'creator11.league@upi',
+    inr_upi_name: 'Creator Entertainment League',
+    inr_bank_name: 'HDFC Bank Ltd',
+    inr_account_number: '50200084729104',
+    inr_ifsc: 'HDFC0000240',
+    inr_account_name: 'Creator Entertainment League Pvt Ltd'
   });
-  const [savingAddresses, setSavingAddresses] = useState(false);
-  const [addressSaveSuccess, setAddressSaveSuccess] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsSaveSuccess, setSettingsSaveSuccess] = useState(false);
 
   // Queues
   const [deposits, setDeposits] = useState<DepositItem[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fetchData = async () => {
     if (!token) return;
     try {
-      const [addr, dep, withdr] = await Promise.all([
-        apiGet('/admin/crypto-settings', token).catch(() => ({})),
+      const [inrSettings, dep, withdr] = await Promise.all([
+        apiGet('/admin/inr-settings', token).catch(() => ({})),
         apiGet('/admin/deposits/pending', token).catch(() => []),
         apiGet('/admin/withdrawals/pending', token).catch(() => [])
       ]);
-      setAddresses(addr || {});
+
+      if (inrSettings && typeof inrSettings === 'object') {
+        setSettings(prev => ({ ...prev, ...inrSettings }));
+      }
       setDeposits(Array.isArray(dep) ? dep : []);
       setWithdrawals(Array.isArray(withdr) ? withdr : []);
     } catch (err) {
-      console.error('Fetch admin crypto data error:', err);
+      console.error('Fetch admin INR data error:', err);
     } finally {
       setLoading(false);
     }
@@ -85,28 +109,35 @@ export default function AdminCryptoControlPage() {
     fetchData();
   }, [token]);
 
-  const handleSaveAddresses = async (e: React.FormEvent) => {
+  const handleCopy = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSavingAddresses(true);
+    setSavingSettings(true);
     setMsg(null);
     try {
-      await apiPut('/admin/crypto-settings', addresses, token!);
-      setAddressSaveSuccess(true);
-      setTimeout(() => setAddressSaveSuccess(false), 3000);
-      setMsg({ type: 'success', text: 'Admin receiving crypto wallet addresses updated successfully!' });
+      await apiPut('/admin/inr-settings', settings, token!);
+      setSettingsSaveSuccess(true);
+      setTimeout(() => setSettingsSaveSuccess(false), 3000);
+      setMsg({ type: 'success', text: 'Official INR payment receiving details updated successfully! Changes are live on all player wallets.' });
     } catch (err: unknown) {
-      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save addresses' });
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save INR settings' });
     } finally {
-      setSavingAddresses(false);
+      setSavingSettings(false);
     }
   };
 
-  const handleApproveDeposit = async (id: string) => {
+  // 1-Click Approve Deposit
+  const handleApproveDeposit = async (id: string, amount: string | number) => {
     setActionLoadingId(id);
     setMsg(null);
     try {
       await apiPost(`/admin/deposits/${id}/approve`, {}, token!);
-      setMsg({ type: 'success', text: 'Deposit verified and USDT credited to user balance!' });
+      setMsg({ type: 'success', text: `Deposit of ₹${parseFloat(amount.toString()).toLocaleString('en-IN')} approved! Player wallet credited.` });
       fetchData();
     } catch (err: unknown) {
       setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Approval failed' });
@@ -115,13 +146,15 @@ export default function AdminCryptoControlPage() {
     }
   };
 
+  // Reject Deposit
   const handleRejectDeposit = async (id: string) => {
-    const reason = prompt('Enter rejection reason (e.g. TXID not found on explorer):') || 'TXID verification failed';
+    const reason = prompt('Enter rejection reason (e.g. UTR not found on bank/UPI statement):') || 'UTR verification failed';
+    if (!reason) return;
     setActionLoadingId(id);
     setMsg(null);
     try {
       await apiPost(`/admin/deposits/${id}/reject`, { reason }, token!);
-      setMsg({ type: 'success', text: 'Deposit marked as rejected.' });
+      setMsg({ type: 'success', text: 'Deposit proof marked as rejected.' });
       fetchData();
     } catch (err: unknown) {
       setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Rejection failed' });
@@ -130,12 +163,13 @@ export default function AdminCryptoControlPage() {
     }
   };
 
-  const handleApproveWithdrawal = async (id: string) => {
+  // 1-Click Approve Withdrawal (Payout)
+  const handleApproveWithdrawal = async (id: string, amount: string | number) => {
     setActionLoadingId(id);
     setMsg(null);
     try {
       await apiPost(`/admin/withdrawals/${id}/approve`, {}, token!);
-      setMsg({ type: 'success', text: 'Withdrawal marked as completed.' });
+      setMsg({ type: 'success', text: `Payout of ₹${Math.abs(parseFloat(amount.toString())).toLocaleString('en-IN')} marked as completed!` });
       fetchData();
     } catch (err: unknown) {
       setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Approval failed' });
@@ -144,269 +178,407 @@ export default function AdminCryptoControlPage() {
     }
   };
 
-  const handleRejectWithdrawal = async (id: string) => {
-    const reason = prompt('Enter rejection reason:') || 'Invalid destination address';
+  // Reject Withdrawal & Refund
+  const handleRejectWithdrawal = async (id: string, amount: string | number) => {
+    const reason = prompt('Enter rejection reason (e.g. Invalid UPI ID / Incorrect Bank Details):') || 'Invalid destination account details';
+    if (!reason) return;
     setActionLoadingId(id);
     setMsg(null);
     try {
       await apiPost(`/admin/withdrawals/${id}/reject`, { reason }, token!);
-      setMsg({ type: 'success', text: 'Withdrawal rejected and USDT refunded to player.' });
+      setMsg({ type: 'success', text: `Withdrawal rejected and ₹${Math.abs(parseFloat(amount.toString())).toLocaleString('en-IN')} refunded to player wallet.` });
       fetchData();
     } catch (err: unknown) {
       setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Rejection failed' });
     } finally {
       setActionLoadingId(null);
     }
-  };
-
-  const getExplorerUrl = (txid?: string, network?: string) => {
-    if (!txid) return '#';
-    if (network === 'TRC20') return `https://tronscan.org/#/transaction/${txid}`;
-    if (network === 'BEP20') return `https://bscscan.com/tx/${txid}`;
-    return `https://etherscan.io/tx/${txid}`;
   };
 
   return (
     <div className="widescreen-container py-4 space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-extrabold text-white flex items-center gap-3">
-          <Wallet size={32} className="text-neon-cyan" />
-          USDT Crypto Gateway Control
-        </h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Configure receiving addresses and review user deposit proofs (TXID) & withdrawal payouts
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-black text-white flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white font-black text-xl shadow-lg shadow-emerald-500/20">
+              ₹
+            </div>
+            <span>INR Payments & Gateway Control</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-text-secondary mt-1">
+            Configure receiving UPI/Bank accounts, verify 12-digit UTR deposit proofs, and approve player payouts
+          </p>
+        </div>
+
+        <button
+          onClick={fetchData}
+          className="self-start sm:self-auto px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-2 cursor-pointer transition-all"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <span>Refresh Data</span>
+        </button>
       </div>
 
       {/* Message Banner */}
-      {msg && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className={`p-4 rounded-2xl flex items-center gap-3 border text-sm ${
-            msg.type === 'success' ? 'bg-success/15 border-success/30 text-success' : 'bg-danger/15 border-danger/30 text-danger'
-          }`}
-        >
-          {msg.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-          <span>{msg.text}</span>
-        </motion.div>
-      )}
+      <AnimatePresence>
+        {msg && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={`p-4 rounded-2xl flex items-center gap-3 border text-xs sm:text-sm font-bold ${
+              msg.type === 'success'
+                ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                : 'bg-red-500/15 border-red-500/40 text-red-300'
+            }`}
+          >
+            {msg.type === 'success' ? <CheckCircle size={18} className="shrink-0" /> : <AlertCircle size={18} className="shrink-0" />}
+            <span>{msg.text}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* SECTION 1: Admin Receiving Wallet Addresses */}
+      {/* ─── SECTION 1: OFFICIAL INR RECEIVING ACCOUNTS (ADMIN CONTROLS) ─── */}
       <div className="glass-card p-6 sm:p-8 border border-white/10">
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
           <div>
-            <h3 className="text-lg font-extrabold text-white">Platform Receiving Addresses</h3>
-            <p className="text-xs text-text-muted">Users will send USDT to these addresses during deposit</p>
+            <h3 className="text-lg font-black text-white flex items-center gap-2">
+              <Smartphone size={20} className="text-emerald-400" />
+              <span>Official Platform Receiving Accounts (UPI & Bank)</span>
+            </h3>
+            <p className="text-xs text-text-muted mt-0.5">
+              Players will pay to this UPI ID & Bank Account when depositing cash on the /wallet page
+            </p>
           </div>
-          <button
-            onClick={fetchData}
-            className="flex items-center gap-1.5 text-xs text-neon-cyan hover:underline cursor-pointer"
-          >
-            <RefreshCw size={12} />
-            <span>Reload</span>
-          </button>
         </div>
 
-        <form onSubmit={handleSaveAddresses} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <form onSubmit={handleSaveSettings} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label className="text-xs font-bold text-text-secondary uppercase tracking-wider block mb-1.5">
-                USDT (TRC20 - Tron) Address
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block mb-1.5">
+                Official UPI ID (VPA)
               </label>
               <input
                 type="text"
-                value={addresses.TRC20 || ''}
-                onChange={e => setAddresses(prev => ({ ...prev, TRC20: e.target.value }))}
-                placeholder="TYDzs..."
-                className="w-full !font-mono !text-xs !py-3"
+                value={settings.inr_upi_id}
+                onChange={e => setSettings(prev => ({ ...prev, inr_upi_id: e.target.value }))}
+                placeholder="creator11.league@upi"
+                className="w-full !font-mono !text-xs !py-3 !bg-black/60 !border-white/15 !rounded-xl text-white"
+                required
               />
             </div>
 
             <div>
-              <label className="text-xs font-bold text-text-secondary uppercase tracking-wider block mb-1.5">
-                USDT (BEP20 - BSC) Address
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block mb-1.5">
+                UPI Merchant / Payee Name
               </label>
               <input
                 type="text"
-                value={addresses.BEP20 || ''}
-                onChange={e => setAddresses(prev => ({ ...prev, BEP20: e.target.value }))}
-                placeholder="0x8894..."
-                className="w-full !font-mono !text-xs !py-3"
+                value={settings.inr_upi_name}
+                onChange={e => setSettings(prev => ({ ...prev, inr_upi_name: e.target.value }))}
+                placeholder="Creator Entertainment League"
+                className="w-full !text-xs !py-3 !bg-black/60 !border-white/15 !rounded-xl text-white"
+                required
               />
             </div>
 
             <div>
-              <label className="text-xs font-bold text-text-secondary uppercase tracking-wider block mb-1.5">
-                USDT (ERC20 - Ethereum) Address
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block mb-1.5">
+                Corporate Bank Name
               </label>
               <input
                 type="text"
-                value={addresses.ERC20 || ''}
-                onChange={e => setAddresses(prev => ({ ...prev, ERC20: e.target.value }))}
-                placeholder="0x0d4a..."
-                className="w-full !font-mono !text-xs !py-3"
+                value={settings.inr_bank_name}
+                onChange={e => setSettings(prev => ({ ...prev, inr_bank_name: e.target.value }))}
+                placeholder="HDFC Bank Ltd"
+                className="w-full !text-xs !py-3 !bg-black/60 !border-white/15 !rounded-xl text-white"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block mb-1.5">
+                Corporate Bank Account Number
+              </label>
+              <input
+                type="text"
+                value={settings.inr_account_number}
+                onChange={e => setSettings(prev => ({ ...prev, inr_account_number: e.target.value }))}
+                placeholder="50200084729104"
+                className="w-full !font-mono !text-xs !py-3 !bg-black/60 !border-white/15 !rounded-xl text-white"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block mb-1.5">
+                Bank IFSC Code
+              </label>
+              <input
+                type="text"
+                value={settings.inr_ifsc}
+                onChange={e => setSettings(prev => ({ ...prev, inr_ifsc: e.target.value.toUpperCase() }))}
+                placeholder="HDFC0000240"
+                className="w-full !font-mono !text-xs !py-3 !bg-black/60 !border-white/15 !rounded-xl uppercase text-white"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block mb-1.5">
+                Account Beneficiary Name
+              </label>
+              <input
+                type="text"
+                value={settings.inr_account_name}
+                onChange={e => setSettings(prev => ({ ...prev, inr_account_name: e.target.value }))}
+                placeholder="Creator Entertainment League Pvt Ltd"
+                className="w-full !text-xs !py-3 !bg-black/60 !border-white/15 !rounded-xl text-white"
+                required
               />
             </div>
           </div>
 
-          <div className="flex justify-end pt-2">
-            <button
+          <div className="flex justify-end pt-3">
+            <motion.button
               type="submit"
-              disabled={savingAddresses}
-              className="px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider bg-neon-cyan text-black flex items-center gap-2 cursor-pointer shadow-lg shadow-neon-cyan/20 hover:opacity-95"
+              disabled={savingSettings}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="px-6 py-3 rounded-xl font-black text-xs bg-gradient-to-r from-emerald-500 to-teal-500 text-black flex items-center gap-2 shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
             >
-              {addressSaveSuccess ? <Check size={16} /> : <Save size={16} />}
-              <span>{savingAddresses ? 'Saving...' : addressSaveSuccess ? 'Saved!' : 'Save Wallet Addresses'}</span>
-            </button>
+              {settingsSaveSuccess ? <Check size={16} /> : <Save size={16} />}
+              <span>{savingSettings ? 'Saving...' : settingsSaveSuccess ? 'Saved & Live!' : 'Save INR Payment Settings'}</span>
+            </motion.button>
           </div>
         </form>
       </div>
 
-      {/* SECTION 2: Pending Deposits Verification Queue */}
-      <div className="glass-card p-6 sm:p-8 border border-white/10">
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-extrabold text-white">Pending Deposits Verification Queue</h3>
-              <span className="px-2.5 py-0.5 rounded-full bg-warning/20 text-warning text-xs font-bold">
-                {deposits.length} Pending
-              </span>
+      {/* ─── SECTION 2: PENDING INR DEPOSITS QUEUE (UTR VERIFICATION) ─── */}
+      <div className="glass-card p-6 sm:p-8 border border-white/10 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-white/5">
+          <div className="flex items-center gap-3">
+            <ArrowDownLeft size={22} className="text-emerald-400" />
+            <div>
+              <h3 className="text-lg font-black text-white flex items-center gap-2">
+                Pending INR Deposit Proofs
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  {deposits.length} Pending
+                </span>
+              </h3>
+              <p className="text-xs text-text-muted">
+                Match the 12-digit UTR with your bank/UPI statement and click Approve to credit the player
+              </p>
             </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Verify blockchain TXID and click "Approve" to instantly credit the user's USDT wallet balance
-            </p>
           </div>
         </div>
 
-        {loading ? (
-          <div className="py-12 text-center text-text-muted">Loading queue...</div>
-        ) : deposits.length === 0 ? (
-          <div className="py-12 text-center text-text-muted">
-            <CheckCircle size={36} className="mx-auto mb-2 text-success opacity-40" />
-            <p>Verification queue is clear. No pending deposits.</p>
+        {deposits.length === 0 ? (
+          <div className="py-12 text-center text-text-muted text-xs">
+            <CheckCircle size={32} className="text-emerald-400 mx-auto mb-2 opacity-50" />
+            <p className="font-bold text-white text-sm">All deposits verified</p>
+            <p className="text-text-muted text-xs mt-0.5">New player deposit submissions will appear here in real-time.</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {deposits.map(d => (
-              <div
-                key={d.id}
-                className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4"
-              >
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base font-black text-white">{parseFloat(d.amount).toFixed(2)} USDT</span>
-                    <span className="px-2 py-0.5 rounded-md bg-neon-cyan/15 text-neon-cyan font-mono text-[10px] font-bold">
-                      {d.network || 'TRC20'}
-                    </span>
-                    <span className="text-xs text-text-secondary">• Player: {d.Wallet?.User?.name || 'User'} ({d.Wallet?.User?.email})</span>
+            {deposits.map(d => {
+              const userObj = d.Wallet?.User;
+              const dateStr = new Date(d.createdAt).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+
+              return (
+                <div
+                  key={d.id}
+                  className="p-4 rounded-2xl bg-black/60 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-black text-white">{userObj?.name || 'Player'}</span>
+                      <span className="text-xs text-text-muted">({userObj?.email || 'No email'})</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                      <span className="font-mono text-lg font-black text-emerald-400">
+                        ₹{parseFloat(d.amount.toString()).toLocaleString('en-IN')}
+                      </span>
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/10 text-white/80">
+                        {d.network || 'UPI'}
+                      </span>
+                      <span className="text-text-muted text-[11px] flex items-center gap-1">
+                        <Clock size={12} /> {dateStr}
+                      </span>
+                    </div>
+
+                    {/* UTR / Ref Number with Copy */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[11px] font-bold text-text-muted">UTR / Ref:</span>
+                      <span className="font-mono text-xs font-black text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                        {d.txid || 'No UTR'}
+                      </span>
+                      {d.txid && (
+                        <button
+                          onClick={() => handleCopy(d.txid!, d.id)}
+                          className="text-[11px] text-text-muted hover:text-white flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedId === d.id ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                          <span>{copiedId === d.id ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      )}
+                      {d.wallet_address && (
+                        <span className="text-[11px] text-text-muted">
+                          • Sender: <strong className="text-white">{d.wallet_address}</strong>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-text-muted font-mono">TXID:</span>
-                    <span className="font-mono text-neon-gold select-all truncate max-w-xs">{d.txid || 'N/A'}</span>
-                    {d.txid && (
-                      <a
-                        href={getExplorerUrl(d.txid, d.network)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-text-muted hover:text-neon-cyan flex items-center gap-0.5 text-[11px]"
-                        title="View on Blockchain Explorer"
-                      >
-                        <ExternalLink size={12} />
-                      </a>
-                    )}
+                  {/* Approve / Reject Actions */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <motion.button
+                      disabled={actionLoadingId === d.id}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleApproveDeposit(d.id, d.amount)}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-black font-black text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+                    >
+                      <CheckCircle size={15} />
+                      <span>{actionLoadingId === d.id ? 'Processing...' : 'Approve & Credit'}</span>
+                    </motion.button>
+
+                    <button
+                      disabled={actionLoadingId === d.id}
+                      onClick={() => handleRejectDeposit(d.id)}
+                      className="px-3 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold text-xs flex items-center gap-1 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      <XCircle size={15} />
+                      <span>Reject</span>
+                    </button>
                   </div>
-                  <p className="text-[10px] text-text-muted">Submitted at: {new Date(d.createdAt).toLocaleString()}</p>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto">
-                  <button
-                    onClick={() => handleApproveDeposit(d.id)}
-                    disabled={actionLoadingId === d.id}
-                    className="flex-1 lg:flex-none px-5 py-2.5 rounded-xl bg-success text-black text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-success/20 hover:opacity-90"
-                  >
-                    <CheckCircle size={14} />
-                    <span>Approve & Credit Balance</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleRejectDeposit(d.id)}
-                    disabled={actionLoadingId === d.id}
-                    className="flex-1 lg:flex-none px-4 py-2.5 rounded-xl bg-danger/20 hover:bg-danger/30 text-danger text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer border border-danger/30"
-                  >
-                    <XCircle size={14} />
-                    <span>Reject</span>
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* SECTION 3: Pending Withdrawals Queue */}
-      <div className="glass-card p-6 sm:p-8 border border-white/10">
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-extrabold text-white">Pending Withdrawals Queue</h3>
-              <span className="px-2.5 py-0.5 rounded-full bg-neon-gold/20 text-neon-gold text-xs font-bold">
-                {withdrawals.length} Pending
-              </span>
+      {/* ─── SECTION 3: PENDING INR WITHDRAWALS QUEUE (PAYOUT PROCESSING) ─── */}
+      <div className="glass-card p-6 sm:p-8 border border-white/10 space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-white/5">
+          <div className="flex items-center gap-3">
+            <ArrowUpRight size={22} className="text-neon-cyan" />
+            <div>
+              <h3 className="text-lg font-black text-white flex items-center gap-2">
+                Pending INR Payout Requests
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                  {withdrawals.length} Pending
+                </span>
+              </h3>
+              <p className="text-xs text-text-muted">
+                Transfer the funds to player's destination account via UPI / NetBanking, then mark as paid
+              </p>
             </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Send USDT to user's destination wallet address and mark completed
-            </p>
           </div>
         </div>
 
         {withdrawals.length === 0 ? (
-          <div className="py-8 text-center text-text-muted">
-            <p>No pending withdrawal payout requests.</p>
+          <div className="py-12 text-center text-text-muted text-xs">
+            <CheckCircle size={32} className="text-cyan-400 mx-auto mb-2 opacity-50" />
+            <p className="font-bold text-white text-sm">All payouts cleared</p>
+            <p className="text-text-muted text-xs mt-0.5">Player withdrawal requests will appear here immediately.</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {withdrawals.map(w => (
-              <div
-                key={w.id}
-                className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4"
-              >
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base font-black text-danger">-{Math.abs(parseFloat(w.amount)).toFixed(2)} USDT</span>
-                    <span className="px-2 py-0.5 rounded-md bg-neon-gold/15 text-neon-gold font-mono text-[10px] font-bold">
-                      {w.network || 'TRC20'}
-                    </span>
-                    <span className="text-xs text-text-secondary">• Player: {w.Wallet?.User?.name || 'User'}</span>
+            {withdrawals.map(w => {
+              const userObj = w.Wallet?.User;
+              const numAmt = Math.abs(parseFloat(w.amount.toString()));
+              const dateStr = new Date(w.createdAt).toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+
+              return (
+                <div
+                  key={w.id}
+                  className="p-4 rounded-2xl bg-black/60 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-black text-white">{userObj?.name || 'Player'}</span>
+                      <span className="text-xs text-text-muted">({userObj?.email || 'No email'})</span>
+                      {userObj?.kyc_pan && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-neon-purple/20 text-neon-purple border border-neon-purple/30">
+                          PAN: {userObj.kyc_pan}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                      <span className="font-mono text-lg font-black text-cyan-400">
+                        ₹{numAmt.toLocaleString('en-IN')}
+                      </span>
+                      <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-white/10 text-white/80">
+                        {w.network || 'UPI'}
+                      </span>
+                      <span className="text-text-muted text-[11px] flex items-center gap-1">
+                        <Clock size={12} /> {dateStr}
+                      </span>
+                      {w.Wallet && (
+                        <span className="text-text-muted text-[11px]">
+                          • Balance: ₹{parseFloat(w.Wallet.balance.toString()).toLocaleString('en-IN')}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Destination Account with Copy */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <span className="text-[11px] font-bold text-text-muted">Payout Destination:</span>
+                      <span className="font-mono text-xs font-black text-white bg-white/10 px-2.5 py-0.5 rounded-md border border-white/15">
+                        {w.wallet_address || 'Not specified'}
+                      </span>
+                      {w.wallet_address && (
+                        <button
+                          onClick={() => handleCopy(w.wallet_address!, w.id)}
+                          className="text-[11px] text-text-muted hover:text-white flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedId === w.id ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                          <span>{copiedId === w.id ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <p className="font-mono text-xs text-text-primary break-all">
-                    Destination: <span className="text-neon-cyan">{w.wallet_address || 'Address'}</span>
-                  </p>
-                </div>
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <motion.button
+                      disabled={actionLoadingId === w.id}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => handleApproveWithdrawal(w.id, w.amount)}
+                      className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-black text-xs flex items-center gap-1.5 shadow-md shadow-cyan-500/20 cursor-pointer disabled:opacity-50"
+                    >
+                      <CheckCircle size={15} />
+                      <span>{actionLoadingId === w.id ? 'Processing...' : 'Mark as Paid'}</span>
+                    </motion.button>
 
-                <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto">
-                  <button
-                    onClick={() => handleApproveWithdrawal(w.id)}
-                    disabled={actionLoadingId === w.id}
-                    className="flex-1 lg:flex-none px-5 py-2.5 rounded-xl bg-neon-cyan text-black text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <CheckCircle size={14} />
-                    <span>Mark Payout Sent</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleRejectWithdrawal(w.id)}
-                    disabled={actionLoadingId === w.id}
-                    className="flex-1 lg:flex-none px-4 py-2.5 rounded-xl bg-danger/20 hover:bg-danger/30 text-danger text-xs font-black uppercase tracking-wider cursor-pointer border border-danger/30"
-                  >
-                    <span>Reject & Refund</span>
-                  </button>
+                    <button
+                      disabled={actionLoadingId === w.id}
+                      onClick={() => handleRejectWithdrawal(w.id, w.amount)}
+                      className="px-3 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-bold text-xs flex items-center gap-1 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      <XCircle size={15} />
+                      <span>Reject & Refund</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

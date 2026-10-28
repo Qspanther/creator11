@@ -227,39 +227,40 @@ router.post('/tournaments/:id/contests', async (req, res) => {
   }
 });
 
-// ─── 4. Crypto Gateway Admin Control (USDT TRC20, BEP20, ERC20) ───
+// ─── 4. INR Payment Gateway & Official Account Settings ───
 
-// GET /admin/crypto-settings
-router.get('/crypto-settings', async (req, res) => {
+const DEFAULT_INR_ADMIN_SETTINGS = {
+  inr_upi_id: 'creator11.league@upi',
+  inr_upi_name: 'Creator Entertainment League',
+  inr_bank_name: 'HDFC Bank Ltd',
+  inr_account_number: '50200084729104',
+  inr_ifsc: 'HDFC0000240',
+  inr_account_name: 'Creator Entertainment League Pvt Ltd'
+};
+
+// GET /admin/inr-settings (also aliases /admin/crypto-settings)
+router.get(['/inr-settings', '/crypto-settings'], async (req, res) => {
   try {
-    const defaultAddresses = {
-      TRC20: 'TYDzsYUEpvnYmQK4WKnMBukZxDHzU4mTRC',
-      BEP20: '0x8894E0a0c962CB723c1976a4421c95949bE2D4E3',
-      ERC20: '0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852'
-    };
-
+    const keys = Object.keys(DEFAULT_INR_ADMIN_SETTINGS);
     const settings = await SystemSetting.findAll({
-      where: {
-        key: ['crypto_trc20_address', 'crypto_bep20_address', 'crypto_erc20_address']
-      }
+      where: { key: keys }
     });
 
+    const result = { ...DEFAULT_INR_ADMIN_SETTINGS };
     settings.forEach(s => {
-      if (s.key === 'crypto_trc20_address' && s.value) defaultAddresses.TRC20 = s.value;
-      if (s.key === 'crypto_bep20_address' && s.value) defaultAddresses.BEP20 = s.value;
-      if (s.key === 'crypto_erc20_address' && s.value) defaultAddresses.ERC20 = s.value;
+      if (s.value) result[s.key] = s.value;
     });
 
-    res.json(defaultAddresses);
+    res.json(result);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch crypto settings' });
+    res.status(500).json({ error: 'Failed to fetch INR settings' });
   }
 });
 
-// PUT /admin/crypto-settings
-router.put('/crypto-settings', async (req, res) => {
+// PUT /admin/inr-settings (also aliases /admin/crypto-settings)
+router.put(['/inr-settings', '/crypto-settings'], async (req, res) => {
   try {
-    const { TRC20, BEP20, ERC20 } = req.body;
+    const data = req.body;
 
     const upsertSetting = async (key, value, description) => {
       if (value !== undefined) {
@@ -272,13 +273,17 @@ router.put('/crypto-settings', async (req, res) => {
       }
     };
 
-    if (TRC20) await upsertSetting('crypto_trc20_address', TRC20, 'USDT TRC20 Admin Receiving Wallet');
-    if (BEP20) await upsertSetting('crypto_bep20_address', BEP20, 'USDT BEP20 Admin Receiving Wallet');
-    if (ERC20) await upsertSetting('crypto_erc20_address', ERC20, 'USDT ERC20 Admin Receiving Wallet');
+    if (data.inr_upi_id) await upsertSetting('inr_upi_id', data.inr_upi_id.trim(), 'Official Admin UPI ID');
+    if (data.inr_upi_name) await upsertSetting('inr_upi_name', data.inr_upi_name.trim(), 'UPI Payee Name');
+    if (data.inr_bank_name) await upsertSetting('inr_bank_name', data.inr_bank_name.trim(), 'Corporate Bank Name');
+    if (data.inr_account_number) await upsertSetting('inr_account_number', data.inr_account_number.trim(), 'Corporate Account Number');
+    if (data.inr_ifsc) await upsertSetting('inr_ifsc', data.inr_ifsc.trim().toUpperCase(), 'Bank IFSC Code');
+    if (data.inr_account_name) await upsertSetting('inr_account_name', data.inr_account_name.trim(), 'Account Beneficiary Name');
 
-    res.json({ message: 'Crypto receiving wallet addresses updated successfully' });
+    res.json({ message: 'INR payment gateway settings updated successfully!' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update crypto settings' });
+    console.error('Update INR settings error:', error);
+    res.status(500).json({ error: 'Failed to update INR settings' });
   }
 });
 

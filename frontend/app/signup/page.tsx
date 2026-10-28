@@ -1,15 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { apiPost } from '../lib/api';
-import { Mail, Lock, User, Zap, ArrowRight } from 'lucide-react';
+import { Mail, Lock, User, Zap, ArrowRight, Gift } from 'lucide-react';
 
 export default function SignupPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', promoCode: '' });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const ref = params.get('ref') || params.get('promo');
+      if (ref) {
+        setForm(prev => ({ ...prev, promoCode: ref.toUpperCase() }));
+      }
+    }
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -88,6 +98,16 @@ export default function SignupPage() {
                 required
                 minLength={6}
                 className="w-full !pl-10"
+              />
+            </div>
+            <div className="relative">
+              <Gift size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-neon-cyan z-10" />
+              <input
+                type="text"
+                placeholder="Referral / Promo Code (Optional)"
+                value={form.promoCode}
+                onChange={e => setForm({ ...form, promoCode: e.target.value.toUpperCase() })}
+                className="w-full !pl-10 font-mono uppercase"
               />
             </div>
             <motion.button

@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const config = require('../config');
-const { Team, TeamCreator, Creator, Tournament, Wallet, Transaction, User } = require('../db/models');
+const { Team, TeamCreator, Creator, Tournament, Wallet, Transaction, User, SystemSetting } = require('../db/models');
 const sequelize = require('../db/index');
 const { getTeamScorecard } = require('../services/scoring-engine');
 
@@ -105,6 +105,39 @@ router.post('/', authenticate, async (req, res) => {
     const now = new Date();
     if (!isBotBypass && now >= new Date(tournament.lock_time)) {
       return res.status(400).json({ error: 'Tournament is locked. Cannot create or edit teams.' });
+    }
+
+    // ★★★ TOURNAMENT ACCESS GATE: Check Active Subscription or Referral Pass ★★★
+    if (!isBotBypass) {
+      const subEnabledSetting = await SystemSetting.findOne({ where: { key: 'subscription_enabled' } });
+      const isSubCheckEnabled = !subEnabledSetting || subEnabledSetting.value === 'true';
+
+      if (isSubCheckEnabled) {
+        const user = await User.findByPk(req.userId);
+        const hasActivePass = user && user.subscription_active_until && new Date(user.subscription_active_until) > now;
+        if (!hasActivePass && user?.role !== 'admin') {
+          const priceSetting = await SystemSetting.findOne({ where: { key: 'subscription_monthly_price' } });
+          const monthlyPrice = priceSetting ? parseFloat(priceSetting.value) : 199;
+
+          const round = user ? user.referral_round || 1 : 1;
+          const targetSetting = await SystemSetting.findOne({ where: { key: `referral_round_${round}_target` } });
+          const daysSetting = await SystemSetting.findOne({ where: { key: `referral_round_${round}_days` } });
+
+          const target = targetSetting ? parseInt(targetSetting.value) : 2;
+          const rewardDays = daysSetting ? parseInt(daysSetting.value) : 15;
+
+          return res.status(403).json({
+            error: 'Active Monthly Subscription or Referral Pass required to enter tournaments.',
+            requiresSubscription: true,
+            monthlyPrice,
+            referralCode: user ? user.referral_code : '',
+            referralRound: round,
+            referralsInRound: user ? user.referrals_in_current_round || 0 : 0,
+            targetForRound: target,
+            rewardDaysForRound: rewardDays,
+          });
+        }
+      }
     }
 
     // Check if user already has a team for this tournament

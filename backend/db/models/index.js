@@ -13,6 +13,7 @@ const Leaderboard = require('./Leaderboard');
 const Notification = require('./Notification');
 const Contest = require('./Contest');
 const ContestParticipant = require('./ContestParticipant');
+const ReferralLog = require('./ReferralLog');
 
 // ─── Associations ───
 
@@ -108,5 +109,6 @@ module.exports = {
   Contest,
   ContestParticipant,
   BotWinHistory,
+  ReferralLog,
 };
 

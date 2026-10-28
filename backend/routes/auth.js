@@ -2,14 +2,14 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('../config');
-const { User, Wallet } = require('../db/models');
+const { User, Wallet, SystemSetting, ReferralLog, Notification } = require('../db/models');
 
 const router = express.Router();
 
 // POST /auth/signup
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password, phone, promoCode, referralCode } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
@@ -19,6 +19,18 @@ router.post('/signup', async (req, res) => {
     const existing = await User.findOne({ where: { email } });
     if (existing) {
       return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Generate clean personal referral promo code for this new user
+    const cleanPrefix = (name || 'USER').replace(/[^a-zA-Z]/g, '').slice(0, 4).toUpperCase();
+    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+    const newReferralCode = `${cleanPrefix || 'CEL'}${randomSuffix}`;
+
+    // Validate referrer promo code if provided
+    let referrer = null;
+    const incomingCode = (promoCode || referralCode || '').trim().toUpperCase();
+    if (incomingCode) {
+      referrer = await User.findOne({ where: { referral_code: incomingCode } });
     }
 
     // Hash password
@@ -37,6 +49,12 @@ router.post('/signup', async (req, res) => {
       otp_code,
       otp_expires_at,
       otp_verified: false,
+      referral_code: newReferralCode,
+      referred_by_id: referrer ? referrer.id : null,
+      referral_round: 1,
+      referrals_in_current_round: 0,
+      total_referrals_count: 0,
+      subscription_type: 'none',
     });
 
     // Create wallet with initial balance
@@ -45,13 +63,81 @@ router.post('/signup', async (req, res) => {
       balance: config.INITIAL_WALLET_BALANCE,
     });
 
+    // Process Referrer Reward Progression (Up to 4 Rounds)
+    if (referrer) {
+      try {
+        const round = referrer.referral_round || 1;
+
+        // Log referral
+        await ReferralLog.create({
+          referrer_user_id: referrer.id,
+          referred_user_id: user.id,
+          round: round,
+        });
+
+        // Increment counts
+        referrer.total_referrals_count = (referrer.total_referrals_count || 0) + 1;
+        referrer.referrals_in_current_round = (referrer.referrals_in_current_round || 0) + 1;
+
+        if (round <= 4) {
+          // Read target and reward days for this specific round
+          const targetSetting = await SystemSetting.findOne({ where: { key: `referral_round_${round}_target` } });
+          const daysSetting = await SystemSetting.findOne({ where: { key: `referral_round_${round}_days` } });
+
+          const defaultTargets = { 1: 2, 2: 3, 3: 4, 4: 5 };
+          const defaultDays = { 1: 15, 2: 15, 3: 15, 4: 30 };
+
+          const target = targetSetting ? parseInt(targetSetting.value) : (defaultTargets[round] || 2);
+          const rewardDays = daysSetting ? parseInt(daysSetting.value) : (defaultDays[round] || 15);
+
+          if (referrer.referrals_in_current_round >= target) {
+            // Milestone Reached: Award Free Access Days!
+            const now = new Date();
+            const currentExpiry = referrer.subscription_active_until ? new Date(referrer.subscription_active_until) : null;
+            let newExpiry;
+            if (currentExpiry && currentExpiry > now) {
+              newExpiry = new Date(currentExpiry.getTime() + rewardDays * 24 * 60 * 60 * 1000);
+            } else {
+              newExpiry = new Date(now.getTime() + rewardDays * 24 * 60 * 60 * 1000);
+            }
+
+            referrer.subscription_active_until = newExpiry;
+            referrer.subscription_type = `referral_round_${round}`;
+            referrer.referral_round = round + 1;
+            referrer.referrals_in_current_round = 0; // Reset for next round
+
+            await referrer.save();
+
+            await Notification.create({
+              user_id: referrer.id,
+              title: `🎉 Round ${round} Complete: Free Pass Unlocked!`,
+              message: `Woohoo! ${target} friends joined using your promo code "${referrer.referral_code}". You unlocked ${rewardDays} Days of FREE tournament access! Next: Round ${Math.min(round + 1, 4)}.`,
+              type: 'referral_reward',
+            });
+          } else {
+            await referrer.save();
+            await Notification.create({
+              user_id: referrer.id,
+              title: '👤 Friend Joined via Your Promo Code!',
+              message: `${user.name} joined with your code. You have ${referrer.referrals_in_current_round}/${target} referrals for Round ${round}. Invite ${target - referrer.referrals_in_current_round} more to unlock ${rewardDays} days free tournament access!`,
+              type: 'referral_progress',
+            });
+          }
+        } else {
+          await referrer.save();
+        }
+      } catch (refErr) {
+        console.error('Error crediting referrer:', refErr);
+      }
+    }
+
     console.log(`📧 MOCK OTP for ${email}: ${otp_code}`);
 
     res.status(201).json({
       message: 'Account created. Please verify OTP.',
       userId: user.id,
       email: user.email,
-      // MOCK: Display OTP since we can't send real SMS/email
+      referralCode: newReferralCode,
       mockOtp: otp_code,
     });
   } catch (error) {
@@ -174,6 +260,11 @@ router.get('/me', async (req, res) => {
     const user = await User.findByPk(decoded.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
+    const now = new Date();
+    const hasActiveSubscription = (user.is_bot || user.role === 'admin')
+      ? true
+      : Boolean(user.subscription_active_until && new Date(user.subscription_active_until) > now);
+
     res.json({
       id: user.id,
       name: user.name,
@@ -182,6 +273,13 @@ router.get('/me', async (req, res) => {
       kycStatus: user.kyc_status,
       otpVerified: user.otp_verified,
       role: user.role,
+      referralCode: user.referral_code,
+      subscriptionActiveUntil: user.subscription_active_until,
+      subscriptionType: user.subscription_type,
+      hasActiveSubscription,
+      referralRound: user.referral_round || 1,
+      referralsInCurrentRound: user.referrals_in_current_round || 0,
+      totalReferralsCount: user.total_referrals_count || 0,
     });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });

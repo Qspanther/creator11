@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { authenticate, isAdmin } = require('../middleware/auth');
-const { User, Creator, Tournament, Team, Wallet, Transaction, Notification, SystemSetting } = require('../db/models');
+const { User, Creator, Tournament, Team, Wallet, Transaction, Notification, SystemSetting, ReferralLog } = require('../db/models');
 const config = require('../config');
 const sequelize = require('../db/index');
 
@@ -544,6 +544,119 @@ router.post('/upload', upload.single('image'), (req, res) => {
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+
+// ─── SUBSCRIPTION & REFERRAL ROUNDS CONTROLS ───
+
+// GET /admin/subscription-settings
+router.get('/subscription-settings', authenticate, isAdmin, async (req, res) => {
+  try {
+    const keys = [
+      'subscription_monthly_price',
+      'subscription_duration_days',
+      'subscription_enabled',
+      'referral_round_1_target',
+      'referral_round_1_days',
+      'referral_round_2_target',
+      'referral_round_2_days',
+      'referral_round_3_target',
+      'referral_round_3_days',
+      'referral_round_4_target',
+      'referral_round_4_days',
+    ];
+
+    const settingsRows = await SystemSetting.findAll({ where: { key: keys } });
+    const settingsMap = {};
+    settingsRows.forEach(s => { settingsMap[s.key] = s.value; });
+
+    const now = new Date();
+    const activeSubscribersCount = await User.count({
+      where: {
+        is_bot: false,
+        subscription_active_until: { [sequelize.Sequelize.Op.gt]: now }
+      }
+    });
+
+    const paidSubscribersCount = await User.count({
+      where: {
+        is_bot: false,
+        subscription_type: 'paid_monthly',
+        subscription_active_until: { [sequelize.Sequelize.Op.gt]: now }
+      }
+    });
+
+    const referralPassesCount = await User.count({
+      where: {
+        is_bot: false,
+        subscription_type: { [sequelize.Sequelize.Op.like]: 'referral_round_%' },
+        subscription_active_until: { [sequelize.Sequelize.Op.gt]: now }
+      }
+    });
+
+    const totalReferralsMade = await ReferralLog.count();
+
+    res.json({
+      settings: {
+        subscription_monthly_price: settingsMap.subscription_monthly_price || '199',
+        subscription_duration_days: settingsMap.subscription_duration_days || '30',
+        subscription_enabled: settingsMap.subscription_enabled || 'true',
+        referral_round_1_target: settingsMap.referral_round_1_target || '2',
+        referral_round_1_days: settingsMap.referral_round_1_days || '15',
+        referral_round_2_target: settingsMap.referral_round_2_target || '3',
+        referral_round_2_days: settingsMap.referral_round_2_days || '15',
+        referral_round_3_target: settingsMap.referral_round_3_target || '4',
+        referral_round_3_days: settingsMap.referral_round_3_days || '15',
+        referral_round_4_target: settingsMap.referral_round_4_target || '5',
+        referral_round_4_days: settingsMap.referral_round_4_days || '30',
+      },
+      stats: {
+        activeSubscribersCount,
+        paidSubscribersCount,
+        referralPassesCount,
+        totalReferralsMade,
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching subscription settings:', error);
+    res.status(500).json({ error: 'Failed to fetch subscription settings' });
+  }
+});
+
+// PUT /admin/subscription-settings
+router.put('/subscription-settings', authenticate, isAdmin, async (req, res) => {
+  try {
+    const allowedKeys = [
+      'subscription_monthly_price',
+      'subscription_duration_days',
+      'subscription_enabled',
+      'referral_round_1_target',
+      'referral_round_1_days',
+      'referral_round_2_target',
+      'referral_round_2_days',
+      'referral_round_3_target',
+      'referral_round_3_days',
+      'referral_round_4_target',
+      'referral_round_4_days',
+    ];
+
+    for (const key of allowedKeys) {
+      if (req.body[key] !== undefined) {
+        const val = String(req.body[key]).trim();
+        const existing = await SystemSetting.findOne({ where: { key } });
+        if (existing) {
+          await existing.update({ value: val });
+        } else {
+          await SystemSetting.create({ key, value: val, description: `Admin setting for ${key}` });
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Subscription & Referral Round settings updated successfully!' });
+  } catch (error) {
+    console.error('Error updating subscription settings:', error);
+    res.status(500).json({ error: 'Failed to update subscription settings' });
   }
 });
 

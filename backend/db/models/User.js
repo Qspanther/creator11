@@ -57,6 +57,35 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  referral_code: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+  },
+  referred_by_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+  subscription_active_until: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  subscription_type: {
+    type: DataTypes.STRING,
+    defaultValue: 'none',
+  },
+  referral_round: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+  },
+  referrals_in_current_round: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+  total_referrals_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
 }, {
   tableName: 'users',
 });

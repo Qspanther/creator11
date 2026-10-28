@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Users, Trophy, Shield, Activity, DollarSign, Gift } from 'lucide-react';
+import { Users, Trophy, Shield, Activity, DollarSign, Gift, Crown } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '../lib/auth-context';
 import { apiGet } from '../lib/api';
@@ -70,7 +70,7 @@ export default function AdminDashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Link href="/admin/crypto">
           <div className="glass-card p-6 hover:border-emerald-500/50 transition-colors cursor-pointer group">
             <DollarSign className="text-emerald-400 mb-4" size={32} />
@@ -97,6 +97,13 @@ export default function AdminDashboardPage() {
             <Shield className="text-neon-cyan mb-4" size={32} />
             <h3 className="text-xl font-bold mb-2 group-hover:text-neon-cyan transition-colors">Manage Users</h3>
             <p className="text-text-secondary text-sm">View user accounts, teams, and moderate the platform.</p>
+          </div>
+        </Link>
+        <Link href="/admin/subscriptions">
+          <div className="glass-card p-6 hover:border-neon-gold/50 transition-colors cursor-pointer group">
+            <Crown className="text-neon-gold mb-4" size={32} />
+            <h3 className="text-xl font-bold mb-2 group-hover:text-neon-gold transition-colors">Subscriptions & Referrals</h3>
+            <p className="text-text-secondary text-sm">Control monthly pass price (₹), access gate, and customize 4-round milestone referral rewards.</p>
           </div>
         </Link>
       </div>

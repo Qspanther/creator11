@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   Home, LayoutDashboard, Trophy, Users, Shield,
-  Wallet, Settings, Gamepad2, ShieldAlert
+  Wallet, Settings, Gamepad2, ShieldAlert, Crown
 } from 'lucide-react';
 import { useAuth } from '../../lib/auth-context';
 
@@ -15,6 +15,7 @@ const navItems = [
   { href: '/creators', label: 'Creators', icon: Users },
   { href: '/my-teams', label: 'My Teams', icon: Shield },
   { href: '/wallet', label: 'Wallet', icon: Wallet },
+  { href: '/subscription', label: 'Pass & Refer', icon: Crown },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

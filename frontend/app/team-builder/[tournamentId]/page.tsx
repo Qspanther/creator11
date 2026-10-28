@@ -55,6 +55,7 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
   const [error, setError] = useState('');
   const [existingTeam, setExistingTeam] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [hasActivePass, setHasActivePass] = useState<boolean | null>(null);
 
   // Profile modal state
   const [modalCreator, setModalCreator] = useState<Creator | null>(null);
@@ -88,6 +89,15 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
         .then(wb => {
           if (wb && wb.balance !== undefined) {
             setWalletBalance(parseFloat(wb.balance));
+          }
+        })
+        .catch(() => {});
+
+      // Fetch user pass status
+      apiGet('/auth/me', token)
+        .then(u => {
+          if (u) {
+            setHasActivePass(Boolean(u.hasActiveSubscription));
           }
         })
         .catch(() => {});
@@ -217,6 +227,15 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
   const handleSave = async () => {
     if (!isReadyToSave) return;
 
+    // Check Active Tournament Pass (Monthly Subscription or Referral Free Pass)
+    if (!existingTeam && hasActivePass === false) {
+      setError('Active Monthly Subscription or Referral Pass is required to enter tournaments. Redirecting...');
+      setTimeout(() => {
+        router.push(`/subscription?reason=tournament_access&tournamentId=${tournamentId}`);
+      }, 1000);
+      return;
+    }
+
     // Strict ₹99 entry fee pre-check for entering tournament
     if (!existingTeam) {
       const entryFee = 99.00;
@@ -255,6 +274,14 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
           captainId,
           viceCaptainId,
         }, token);
+
+        if (res?.requiresSubscription) {
+          setError('Active Monthly Subscription or Referral Pass is required. Redirecting...');
+          setTimeout(() => {
+            router.push(`/subscription?reason=tournament_access&tournamentId=${tournamentId}`);
+          }, 1200);
+          return;
+        }
 
         if (res?.requiresDeposit || res?.error?.includes('Insufficient wallet balance')) {
           router.push(`/wallet?required=99&reason=contest_entry&tournamentId=${tournamentId}`);
@@ -807,6 +834,25 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
             {error && (
               <div className="relative z-10 p-3 rounded-xl bg-danger/15 border border-danger/30 text-xs text-danger mb-4">
                 {error}
+              </div>
+            )}
+
+            {/* Tournament Pass Status Warning */}
+            {!existingTeam && hasActivePass === false && (
+              <div className="relative z-10 p-3 rounded-xl bg-neon-gold/15 border border-neon-gold/40 text-xs mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Crown size={16} className="text-neon-gold shrink-0" />
+                  <div>
+                    <span className="font-bold text-white">Access Pass Required</span>
+                    <span className="text-[10px] block text-white/70">Monthly pass or free referral pass needed to battle</span>
+                  </div>
+                </div>
+                <Link
+                  href={`/subscription?tournamentId=${tournamentId}`}
+                  className="text-[11px] font-bold text-neon-gold underline hover:text-white shrink-0"
+                >
+                  Get Pass →
+                </Link>
               </div>
             )}
 

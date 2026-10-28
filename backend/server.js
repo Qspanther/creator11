@@ -36,6 +36,7 @@ app.use('/admin', require('./routes/admin'));
 app.use('/notifications', require('./routes/notifications'));
 app.use('/contests', require('./routes/contests'));
 app.use('/bot-manager', require('./routes/bot-manager'));
+app.use('/subscription', require('./routes/subscription'));
 
 // Health check
 app.get('/health', (req, res) => {

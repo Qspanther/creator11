@@ -79,11 +79,13 @@ export default function AdminCreatorsPage() {
     formData.append('image', file);
 
     try {
+      const authHeaders: Record<string, string> = {};
+      if (token) {
+        authHeaders['Authorization'] = `Bearer ${token}`;
+      }
       const res = await fetch('/api-backend/admin/upload', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        headers: authHeaders,
         body: formData
       });
       const data = await res.json();
@@ -91,9 +93,11 @@ export default function AdminCreatorsPage() {
         setEditForm(prev => ({ ...prev, profile_image_url: data.url }));
       } else {
         console.error('Upload failed', data);
+        alert(data.error || 'Upload failed');
       }
     } catch (err) {
       console.error('Upload error', err);
+      alert('Photo upload failed: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setUploading(false);
     }

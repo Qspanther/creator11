@@ -533,7 +533,7 @@ router.post('/upload', upload.single('image'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    const imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+    const imageUrl = `/api-backend/uploads/${req.file.filename}`;
     res.json({ url: imageUrl });
   } catch (error) {
     console.error('Upload error:', error);

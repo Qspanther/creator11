@@ -49,11 +49,23 @@ async function validateTeam(creatorIds, captainId, viceCaptainId, tournamentPlat
     categoryCounts[creator.category] = (categoryCounts[creator.category] || 0) + 1;
   }
 
+  let categoriesWithThree = 0;
   for (const category of config.CATEGORIES) {
     const count = categoryCounts[category] || 0;
-    if (count > config.CREATORS_PER_CATEGORY) {
-      errors.push(`Category "${category}" can have at most ${config.CREATORS_PER_CATEGORY} creators, got ${count}`);
+    if (count > 3) {
+      errors.push(`Category "${category}" can have at most 3 creators, got ${count}`);
+    } else if (count === 3) {
+      categoriesWithThree++;
     }
+    if (count < 2) {
+      errors.push(`Category "${category}" must have at least 2 creators, got ${count}`);
+    }
+  }
+
+  if (categoriesWithThree > 1) {
+    errors.push(`Only 1 category can have 3 creators. Found ${categoriesWithThree} categories with 3 creators.`);
+  } else if (categoriesWithThree < 1 && creatorIds.length === config.TOTAL_TEAM_SIZE) {
+    errors.push('Exactly one category must have 3 creators to complete the 11-player lineup (3 + 2 + 2 + 2 + 2).');
   }
 
   // Check total credits

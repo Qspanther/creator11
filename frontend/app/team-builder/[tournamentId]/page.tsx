@@ -105,9 +105,23 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
     return counts;
   }, [selectedCreators]);
 
-  const maxCredits = config?.totalCredits || 110;
+  const maxCredits = config?.totalCredits || 125;
   const totalRequired = config?.totalTeamSize || 11;
-  const maxPerCategory = config?.creatorsPerCategory || 3;
+
+  // Category with 3 players check (only ONE category can have 3)
+  const categoryWithThree = useMemo(() => {
+    return Object.keys(categoryCounts).find(cat => (categoryCounts[cat] || 0) >= 3) || null;
+  }, [categoryCounts]);
+
+  // Dynamic max allowed for each category:
+  // - If a category already has 3: that category max = 3, other categories max = 2
+  // - If no category has 3 yet: any category can reach up to 3
+  const getCategoryMax = (cat: string) => {
+    if (categoryWithThree) {
+      return categoryWithThree === cat ? 3 : 2;
+    }
+    return 3;
+  };
 
   const filteredCreators = useMemo(() => {
     let list = [...creators];
@@ -155,8 +169,13 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
       }
 
       const count = categoryCounts[creator.category] || 0;
-      if (count >= maxPerCategory) {
-        setError(`Max ${maxPerCategory} creators allowed in category "${creator.category}".`);
+      const catMax = getCategoryMax(creator.category);
+      if (count >= catMax) {
+        if (catMax === 2 && categoryWithThree) {
+          setError(`Category "${creator.category}" is locked at 2. Category "${categoryWithThree}" already has 3 players.`);
+        } else {
+          setError(`Category "${creator.category}" is locked (maximum ${catMax} reached).`);
+        }
         return;
       }
 
@@ -167,7 +186,19 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
     }
   };
 
-  const isTeamComplete = selected.size === totalRequired;
+  const isCategoryDistributionValid = useMemo(() => {
+    if (selected.size !== totalRequired) return false;
+    let withThree = 0;
+    const allCats = config?.categories || ['Gaming', 'Vlogging', 'Comedy', 'Tech', 'Lifestyle'];
+    for (const cat of allCats) {
+      const c = categoryCounts[cat] || 0;
+      if (c === 3) withThree++;
+      else if (c !== 2) return false;
+    }
+    return withThree === 1;
+  }, [selected.size, totalRequired, categoryCounts, config?.categories]);
+
+  const isTeamComplete = selected.size === totalRequired && isCategoryDistributionValid;
   const isReadyToSave = isTeamComplete && captainId && viceCaptainId && captainId !== viceCaptainId && creditsUsed <= maxCredits;
 
   const handleSave = async () => {
@@ -318,7 +349,25 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
             {/* Category Filter Pills */}
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
               {categories.map(cat => {
-                const count = cat === 'All' ? null : (categoryCounts[cat] || 0);
+                if (cat === 'All') {
+                  const isActive = activeCategory === 'All';
+                  return (
+                    <button
+                      key="All"
+                      onClick={() => setActiveCategory('All')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+                        isActive
+                          ? 'bg-neon-cyan text-black shadow-lg shadow-neon-cyan/25 font-black scale-105'
+                          : 'bg-white/[0.04] text-text-secondary hover:text-white hover:bg-white/[0.08]'
+                      }`}
+                    >
+                      <span>All</span>
+                    </button>
+                  );
+                }
+                const count = categoryCounts[cat] || 0;
+                const catMax = getCategoryMax(cat);
+                const isLocked = count >= catMax;
                 const isActive = activeCategory === cat;
                 return (
                   <button
@@ -327,15 +376,21 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
                     className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
                       isActive
                         ? 'bg-neon-cyan text-black shadow-lg shadow-neon-cyan/25 font-black scale-105'
-                        : 'bg-white/[0.04] text-text-secondary hover:text-white hover:bg-white/[0.08]'
+                        : isLocked
+                          ? 'bg-white/[0.06] text-white/90 border border-white/10'
+                          : 'bg-white/[0.04] text-text-secondary hover:text-white hover:bg-white/[0.08]'
                     }`}
                   >
                     <span>{cat}</span>
-                    {count !== null && (
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-black/30 text-black' : 'bg-white/10 text-text-muted'}`}>
-                        {count}/{maxPerCategory}
-                      </span>
-                    )}
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                      isActive 
+                        ? 'bg-black/30 text-black' 
+                        : isLocked 
+                          ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40' 
+                          : 'bg-white/10 text-text-muted'
+                    }`}>
+                      {count}/{catMax} {isLocked ? '??' : ''}
+                    </span>
                   </button>
                 );
               })}
@@ -366,6 +421,25 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
             </div>
           </div>
 
+          {/* Lineup Rule Banner */}
+          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-neon-cyan/[0.08] to-blue-500/[0.04] border border-neon-cyan/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">?</span>
+              <p className="text-text-secondary leading-snug">
+                <strong className="text-white">11-Player Lineup Rule:</strong> Pick <strong className="text-neon-cyan">3 creators from only 1 category</strong>, and <strong className="text-neon-cyan">2 creators from each of the other 4 categories</strong> (3 + 2 + 2 + 2 + 2 = 11).
+              </p>
+            </div>
+            {categoryWithThree ? (
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-neon-cyan text-black shrink-0 shadow-sm shadow-neon-cyan/30">
+                ? 3rd Player: {categoryWithThree}
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white/10 text-white/80 shrink-0">
+                3-Player Slot Open
+              </span>
+            )}
+          </div>
+
           {/* Roster Cards List */}
           <div className="space-y-3">
             {filteredCreators.length === 0 ? (
@@ -379,10 +453,12 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
                 const isCaptain = captainId === creator.id;
                 const isVc = viceCaptainId === creator.id;
                 const count = categoryCounts[creator.category] || 0;
+                const catMax = getCategoryMax(creator.category);
+                const isCategoryLocked = count >= catMax;
                 const canPick = isSelected || (
                   selected.size < totalRequired &&
                   creditsUsed + parseFloat(creator.credit_cost) <= maxCredits &&
-                  count < maxPerCategory
+                  !isCategoryLocked
                 );
                 const portrait = getPortraitUrl(creator);
 
@@ -477,10 +553,10 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
                               ? 'bg-neon-cyan text-black shadow-md shadow-neon-cyan/25'
                               : canPick
                                 ? 'bg-white/[0.06] text-white hover:bg-neon-cyan hover:text-black'
-                                : 'bg-white/[0.02] text-text-muted cursor-not-allowed'
+                                : 'bg-white/[0.02] text-text-muted cursor-not-allowed opacity-50'
                           }`}
                         >
-                          {isSelected ? <Check size={18} /> : '+'}
+                          {isSelected ? <Check size={18} /> : isCategoryLocked ? <Lock size={14} className="text-text-muted" /> : '+'}
                         </button>
                       </div>
                     </div>

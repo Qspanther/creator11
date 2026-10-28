@@ -10,7 +10,7 @@ const config = {
   CATEGORIES: ["Gaming", "Vlogging", "Comedy", "Tech", "Lifestyle"],
   CREATORS_PER_CATEGORY: 3,
   TOTAL_TEAM_SIZE: 11,  // Hard requirement for a valid fantasy team
-  TOTAL_CREDITS: 110,
+  TOTAL_CREDITS: 125,
 
   // ─── Multipliers ───
   CAPTAIN_MULTIPLIER: 2.0,

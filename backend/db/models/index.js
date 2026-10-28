@@ -1,3 +1,4 @@
+const BotWinHistory = require('./BotWinHistory');
 const SystemSetting = require('./SystemSetting');
 const User = require('./User');
 const Wallet = require('./Wallet');
@@ -106,4 +107,6 @@ module.exports = {
   Notification,
   Contest,
   ContestParticipant,
+  BotWinHistory,
 };
+

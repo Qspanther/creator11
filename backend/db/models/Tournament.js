@@ -54,6 +54,10 @@ const Tournament = sequelize.define('Tournament', {
     type: DataTypes.INTEGER,
     defaultValue: 0,
   },
+  rankings_finalized: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
 }, {
   tableName: 'tournaments',
 });

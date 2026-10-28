@@ -187,14 +187,21 @@ export default function TournamentListPage() {
                 )}
 
                 {isCompleted && (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => router.push(`/leaderboard/${t.id}`)}
-                    className="w-full py-3 text-sm font-black bg-gradient-to-r from-neon-gold to-amber-500 text-black rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-neon-gold/20 cursor-pointer"
-                  >
-                    <Medal size={16} /> View Top 100 Winners
-                  </motion.button>
+                  t.rankings_finalized !== false && t.rankings_finalized !== 0 ? (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => router.push(`/leaderboard/${t.id}`)}
+                      className="w-full py-3 text-sm font-black bg-gradient-to-r from-neon-gold to-amber-500 text-black rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-neon-gold/20 cursor-pointer"
+                    >
+                      <Medal size={16} /> View Top 100 Winners
+                    </motion.button>
+                  ) : (
+                    <div className="w-full py-3 px-3 text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl flex items-center justify-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                      Auditing Results & Finalizing Ranks (Ready in 1 min)...
+                    </div>
+                  )
                 )}
               </motion.div>
             );

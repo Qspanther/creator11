@@ -1,22 +1,18 @@
 /**
- * ★★★ CREATOR11 BOT MANAGER & CONTROLLER ★★★
+ * ★★★ CREATOR11 BOT MANAGER & CENTRAL COMMAND NETWORK ★★★
  * 
- * Standalone Bot Network Leadership & Control System
- * 
- * Communication:
- * - 100% decoupled from backend internals
- * - Communicates strictly via HTTP REST API with secret `x-bot-api-key`
+ * Autonomous Bot Leadership, Continuous Schedule Tracker & Fair-Rotation System
  * 
  * Features:
- * - Controls and leads 300 unique registered bots
- * - Special Access: Allows bots to form teams in completed or locked contests
- * - Smart 11-player lineup generator following all Creator11 rules
- * - Recalculates scores & checks Top 100 Leaderboards
+ * - Hourly / Continuous tracking of upcoming and live contests
+ * - 1-Minute Rapid Command Window: automatically deploys 300 bots as soon as a contest completes
+ * - Anti-Monopoly & Fair Winner Rotation Engine: every bot eventually wins; no bot monopolizes #1
+ * - Locks and unlocks "View Top 100 Winners" once all rankings are fully audited & ready
+ * - 100% decoupled from project database: communicates strictly via API Key over HTTP
  */
 
 const http = require('http');
 const https = require('https');
-const url = require('url');
 
 // Configuration
 const CONFIG = {
@@ -25,6 +21,8 @@ const CONFIG = {
   TOTAL_BOTS: 300,
   DEFAULT_COMPLETED_TOURNAMENT_ID: '0b46906f-97df-478a-9ed1-451c24fda5c4', // YouTube Mega Championship (Completed)
   DEFAULT_LIVE_TOURNAMENT_ID: 'b9bdbc3a-df26-4746-b9f6-7a9152703fc3', // YouTube Daily Battle (24-Hour)
+  DAEMON_POLL_INTERVAL_MS: 30 * 1000, // 30 seconds
+  HOURLY_LOG_INTERVAL_MS: 60 * 60 * 1000, // 1 hour
 };
 
 /**
@@ -99,49 +97,49 @@ class BotManager {
   }
 
   /**
-   * 2. List all 300 registered bots
+   * 2. Real-time schedule of upcoming, live, and completed contests
+   */
+  async getSchedule() {
+    return await apiRequest('/bot-manager/schedule', 'GET');
+  }
+
+  /**
+   * 3. List all 300 registered bots
    */
   async listBots() {
     return await apiRequest('/bot-manager/bots', 'GET');
   }
 
   /**
-   * 3. List all tournaments
+   * 4. Past winners history to inspect fair rotation
    */
-  async listTournaments() {
-    return await apiRequest('/bot-manager/tournaments', 'GET');
+  async getWinnersHistory() {
+    return await apiRequest('/bot-manager/winners-history', 'GET');
   }
 
   /**
-   * 4. Command bots to join a tournament (Supports both live and completed contests via Special Bot Access!)
-   * @param {string} tournamentId 
-   * @param {number} count Number of bots to deploy (up to 300)
+   * 5. ★★★ Master Command: 300-Bot Autonomous Deployment with Fair Winner Rotation ★★★
+   * Automatically executes the 1-minute command window post-contest:
+   * - Enforces anti-monopoly fair rotation so a new bot wins every time
+   * - Generates 300 unique valid 11-player teams
+   * - Finalizes scores and enables "View Top 100 Winners" button!
+   */
+  async deploy300Autonomous(tournamentId = CONFIG.DEFAULT_COMPLETED_TOURNAMENT_ID) {
+    console.log(`🤖 [BotManager] COMMAND: Deploying 300 bots into tournament: ${tournamentId}...`);
+    console.log(`🎲 [BotManager] Applying Fair Winner Rotation & Anti-Monopoly algorithm...`);
+    return await apiRequest('/bot-manager/deploy-300-autonomous', 'POST', {
+      tournamentId
+    });
+  }
+
+  /**
+   * 6. Standard batch join
    */
   async deployBots(tournamentId, count = 10) {
-    console.log(`🤖 [BotManager] Commanding ${count} bots to deploy into tournament: ${tournamentId}...`);
     return await apiRequest('/bot-manager/batch-join', 'POST', {
       tournamentId,
       botCount: count
     });
-  }
-
-  /**
-   * 5. Special Access: Command bots to create teams in a COMPLETED contest
-   * Specifically targets contests that have already ended and computes their scores!
-   */
-  async deployToCompletedContest(tournamentId = CONFIG.DEFAULT_COMPLETED_TOURNAMENT_ID, count = 20) {
-    console.log(`🏆 [BotManager] SPECIAL ACCESS: Deploying ${count} bots into COMPLETED tournament: ${tournamentId}...`);
-    return await apiRequest('/bot-manager/batch-join', 'POST', {
-      tournamentId,
-      botCount: count
-    });
-  }
-
-  /**
-   * 6. Recalculate scores and leaderboard for a tournament
-   */
-  async recalculateScores(tournamentId) {
-    return await apiRequest(`/bot-manager/recalculate/${tournamentId}`, 'POST');
   }
 
   /**
@@ -149,6 +147,90 @@ class BotManager {
    */
   async getLeaderboard(tournamentId) {
     return await apiRequest(`/bot-manager/leaderboard/${tournamentId}`, 'GET');
+  }
+
+  /**
+   * 8. Continuous Autonomous Daemon
+   * Continuously tracks contests, checks schedule, and automatically executes 300-bot command
+   * as soon as a contest completes!
+   */
+  async runDaemon() {
+    console.log('🤖 [BotManager Daemon] Started autonomous monitoring service...');
+    console.log(`⏱️  Daemon Poll Interval: ${CONFIG.DAEMON_POLL_INTERVAL_MS / 1000}s`);
+    console.log(`📢 Hourly Schedule Checks: ENABLED`);
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    let lastHourlyCheck = 0;
+    const processedTournaments = new Set();
+
+    const tick = async () => {
+      try {
+        const now = Date.now();
+        const schedule = await this.getSchedule();
+
+        // 1. Hourly Schedule Diagnostic Log
+        if (now - lastHourlyCheck >= CONFIG.HOURLY_LOG_INTERVAL_MS || lastHourlyCheck === 0) {
+          lastHourlyCheck = now;
+          console.log(`\n📅 [SCHEDULE UPDATE] — ${new Date().toLocaleTimeString()} —`);
+          
+          if (schedule.liveContests && schedule.liveContests.length > 0) {
+            schedule.liveContests.forEach(lc => {
+              console.log(`  🔴 LIVE CONTEST: "${lc.name}" | Ends in: ${lc.minutesRemaining} mins | Participants: ${lc.participants}`);
+            });
+          } else {
+            console.log('  ⚪ No live contests running right now.');
+          }
+
+          if (schedule.upcomingContests && schedule.upcomingContests.length > 0) {
+            schedule.upcomingContests.forEach(uc => {
+              console.log(`  ⏳ UPCOMING CONTEST: "${uc.name}" | Starts in: ${uc.minutesUntilStart} mins`);
+            });
+          }
+
+          if (schedule.completedContests && schedule.completedContests.length > 0) {
+            console.log(`  🏁 RECENT COMPLETED CONTESTS: ${schedule.completedContests.length} tracked`);
+          }
+          console.log('───────────────────────────────────────────────────────────────────\n');
+        }
+
+        // 2. Check for completed tournaments that need 300-bot deployment & ranking finalization
+        if (schedule.completedContests) {
+          for (const c of schedule.completedContests) {
+            if (!c.rankingsFinalized && !processedTournaments.has(c.id)) {
+              processedTournaments.add(c.id);
+              console.log(`\n🚨 [BOT MANAGER ALERT] Contest "${c.name}" has COMPLETED!`);
+              console.log(`⚡ [1-MINUTE COMMAND WINDOW] Commanding all 300 bots to build their fantasy teams...`);
+              console.log(`🎲 Running Anti-Monopoly & Fair Winner Rotation Engine...`);
+
+              const res = await this.deploy300Autonomous(c.id);
+
+              console.log(`✅ [SUCCESS] ${res.totalTeams} bots deployed!`);
+              console.log(`🏆 [NEW ROTATED WINNER]: "${res.winner.botName}" (Rank #1 with ${res.winner.points} pts)`);
+              console.log(`🔓 "View Top 100 Winners" button is now UNLOCKED & ENABLED for users!\n`);
+            }
+          }
+        }
+
+        // 3. Check if any live contest has reached its end time
+        if (schedule.liveContests) {
+          for (const lc of schedule.liveContests) {
+            if (lc.minutesRemaining === 0 && !processedTournaments.has(lc.id)) {
+              processedTournaments.add(lc.id);
+              console.log(`\n🚨 [BOT MANAGER ALERT] Live Contest "${lc.name}" time is UP!`);
+              console.log(`⚡ [1-MINUTE COMMAND WINDOW] Commanding all 300 bots to build their fantasy teams...`);
+              const res = await this.deploy300Autonomous(lc.id);
+              console.log(`✅ [SUCCESS] ${res.totalTeams} bots deployed! Winner: "${res.winner.botName}"!`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('⚠️ [BotManager Daemon] Error during schedule tick:', err.message);
+      }
+    };
+
+    // Run first tick immediately, then setInterval
+    await tick();
+    setInterval(tick, CONFIG.DAEMON_POLL_INTERVAL_MS);
   }
 }
 
@@ -171,9 +253,34 @@ async function runCli() {
         console.log(`📊 Total Registered Bots: ${res.botNetwork.totalBots}`);
         console.log(`🔑 Bot Manager API Key: Configured`);
         console.log(`⚡ Special Post-Contest Access: ${res.botNetwork.specialPostContestAccess}`);
-        console.log('\nActive / Tracked Tournaments:');
+        console.log(`🎲 Fair Winner Rotation Engine: ${res.botNetwork.fairRotationEngine}`);
+        console.log('\nTracked Tournaments:');
         res.tournaments.forEach(t => {
-          console.log(`  • [${t.status.toUpperCase().padEnd(9)}] ${t.name} (ID: ${t.id}) | Participants: ${t.current_participants}`);
+          const rankStatus = t.rankings_finalized ? 'FINALIZED' : 'PROCESSING...';
+          console.log(`  • [${t.status.toUpperCase().padEnd(9)}] ${t.name.padEnd(40)} | Participants: ${String(t.current_participants).padStart(3)} | Rankings: ${rankStatus}`);
+        });
+        break;
+      }
+
+      case 'schedule': {
+        const res = await manager.getSchedule();
+        console.log(`🕒 Server Time: ${new Date(res.currentTime).toLocaleString()}\n`);
+        console.log('🔴 LIVE CONTESTS:');
+        if (res.liveContests.length === 0) console.log('  None currently active.');
+        res.liveContests.forEach(lc => {
+          console.log(`  • ${lc.name} (Ends in: ${lc.minutesRemaining} mins) | Participants: ${lc.participants}`);
+        });
+
+        console.log('\n⏳ UPCOMING CONTESTS:');
+        if (res.upcomingContests.length === 0) console.log('  None scheduled.');
+        res.upcomingContests.forEach(uc => {
+          console.log(`  • ${uc.name} (Starts in: ${uc.minutesUntilStart} mins) | ID: ${uc.id}`);
+        });
+
+        console.log('\n🏁 RECENT COMPLETED CONTESTS:');
+        res.completedContests.forEach(cc => {
+          const status = cc.rankingsFinalized ? 'FINALIZED (Button Active)' : 'PENDING 300-BOT DEPLOYMENT';
+          console.log(`  • ${cc.name} | Status: ${status} | ID: ${cc.id}`);
         });
         break;
       }
@@ -191,44 +298,33 @@ async function runCli() {
         break;
       }
 
-      case 'tournaments': {
-        const res = await manager.listTournaments();
-        console.log(`Tournaments in System (${res.tournaments.length}):`);
-        res.tournaments.forEach(t => {
-          console.log(`\n• Tournament: ${t.name}`);
-          console.log(`  ID: ${t.id}`);
-          console.log(`  Status: ${t.status}`);
-          console.log(`  Platform: ${t.platform} | Prize Pool: ${t.prize_pool} USDT`);
-          console.log(`  Current Participants: ${t.current_participants}`);
-          console.log(`  Duration: ${t.start_time}  TO  ${t.end_time}`);
+      case 'winners-history': {
+        const res = await manager.getWinnersHistory();
+        console.log(`📊 Total Recorded Tournament Winners: ${res.totalRecorded}`);
+        console.log('\nRecent Top 10 Winners:');
+        res.history.slice(0, 10).forEach(h => {
+          console.log(`  Rank #${h.rank} | Bot ID: ${h.bot_user_id} | Points: ${h.points} | Date: ${h.created_at}`);
         });
+        console.log('\nWin Distribution (Shows rotation works):');
+        console.log(res.winCounts);
         break;
       }
 
-      case 'deploy': {
+      case 'deploy-300':
+      case 'trigger-ended': {
         const tidIndex = args.indexOf('--tournament');
-        const countIndex = args.indexOf('--count');
-
-        const tournamentId = tidIndex !== -1 ? args[tidIndex + 1] : CONFIG.DEFAULT_LIVE_TOURNAMENT_ID;
-        const count = countIndex !== -1 ? parseInt(args[countIndex + 1], 10) : 10;
-
-        console.log(`Deploying ${count} bots to tournament ID: ${tournamentId}...`);
-        const res = await manager.deployBots(tournamentId, count);
-        console.log(`✅ ${res.message}`);
-        break;
-      }
-
-      case 'deploy-completed': {
-        const tidIndex = args.indexOf('--tournament');
-        const countIndex = args.indexOf('--count');
-
         const tournamentId = tidIndex !== -1 ? args[tidIndex + 1] : CONFIG.DEFAULT_COMPLETED_TOURNAMENT_ID;
-        const count = countIndex !== -1 ? parseInt(args[countIndex + 1], 10) : 20;
 
-        console.log(`⚡ SPECIAL ACCESS: Deploying ${count} bots to COMPLETED contest ID: ${tournamentId}...`);
-        const res = await manager.deployToCompletedContest(tournamentId, count);
-        console.log(`✅ ${res.message}`);
-        console.log(`Rankings & Scores recalculated automatically!`);
+        console.log(`🚨 Triggering 1-Minute Rapid Command Window for 300 bots on tournament: ${tournamentId}`);
+        const res = await manager.deploy300Autonomous(tournamentId);
+        console.log(`\n🎉 ${res.message}`);
+        console.log(`🏆 NEW ROTATED WINNER: "${res.winner.botName}" (Rank #1 with ${res.winner.points} pts | Prize: ${res.winner.prize} USDT)`);
+        console.log(`🔒 Rankings finalized: ${res.rankingsFinalized}`);
+        console.log(`👥 Total teams generated: ${res.totalTeams}`);
+        console.log(`\nTop 5 Winners Lineup:`);
+        res.top10Lineup.slice(0, 5).forEach(e => {
+          console.log(`  Rank #${e.rank} | User ID: ${e.userId} | Points: ${e.points}`);
+        });
         break;
       }
 
@@ -239,7 +335,8 @@ async function runCli() {
         const res = await manager.getLeaderboard(tournamentId);
         console.log(`🏆 Tournament: ${res.tournament.name} (${res.tournament.status.toUpperCase()})`);
         console.log(`Total Ranked Teams: ${res.totalRanked}`);
-        console.log('Top 15 Standings:');
+        console.log(`Rankings Finalized Status: ${res.tournament.rankings_finalized ? 'YES (Unlocked)' : 'NO (Processing...)'}`);
+        console.log('\nTop 15 Standings:');
         res.leaderboard.slice(0, 15).forEach(e => {
           const botTag = e.isBot ? '[BOT]' : '[USER]';
           console.log(`  #${String(e.rank).padStart(3)} | ${botTag.padEnd(6)} ${e.userName.padEnd(25)} | Points: ${String(e.totalPoints.toFixed(2)).padStart(8)} | Prize: ${e.prizeAmount} USDT`);
@@ -247,20 +344,23 @@ async function runCli() {
         break;
       }
 
+      case 'daemon': {
+        await manager.runDaemon();
+        break;
+      }
+
       case 'help':
       default: {
         console.log('Usage: node bot_manager.js <command> [options]\n');
         console.log('Commands:');
-        console.log('  status                         Show bot network health and tournament statuses');
-        console.log('  list-bots                      List registered bots (300 unique bots)');
-        console.log('  tournaments                    List all available tournaments');
-        console.log('  deploy [--tournament ID] [--count N]       Command N bots to join a tournament');
-        console.log('  deploy-completed [--tournament ID] [--count N] Command bots to create teams in COMPLETED contest');
+        console.log('  status                         Show bot network health, registered bots, and fair rotation status');
+        console.log('  schedule                       Check upcoming, live, and completed contests schedule');
+        console.log('  list-bots                      List all 300 unique registered bots');
+        console.log('  winners-history                View past winners history and anti-monopoly distribution');
+        console.log('  deploy-300 [--tournament ID]   Command all 300 bots to deploy with Fair Winner Rotation');
+        console.log('  daemon                         Start the autonomous schedule tracker and auto-deployment daemon');
         console.log('  leaderboard [--tournament ID]  View Top 100 leaderboard with bot tags and scores');
         console.log('  help                           Show this help message');
-        console.log('\nEnvironment Variables:');
-        console.log('  CREATOR11_API_URL   (default: http://localhost:5000)');
-        console.log('  BOT_API_KEY         (default: c11_bot_mgr_sec_9938a7fbc21d49e)');
         break;
       }
     }
@@ -269,7 +369,6 @@ async function runCli() {
   }
 }
 
-// Run CLI if called directly
 if (require.main === module) {
   runCli();
 }

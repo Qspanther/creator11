@@ -242,11 +242,21 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
   const categories = ['All', ...(config?.categories || ['Gaming', 'Vlogging', 'Comedy', 'Tech', 'Lifestyle'])];
 
   // Helper fallback portrait generator
-  const getPortraitUrl = (creator: Creator) => {
-    if (creator.profile_image_url && creator.profile_image_url.startsWith('http')) {
-      return creator.profile_image_url;
+  const getPortraitUrl = (creator: any) => {
+    const rawUrl = typeof creator === 'string' ? creator : creator?.profile_image_url;
+    if (!rawUrl || typeof rawUrl !== 'string') {
+      return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
     }
-    return `https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80`;
+    if (rawUrl.includes('localhost:5000/uploads/') || rawUrl.includes('127.0.0.1:5000/uploads/')) {
+      return rawUrl.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/uploads\//, '/api-backend/uploads/');
+    }
+    if (rawUrl.startsWith('/api-backend/') || rawUrl.startsWith('/uploads/')) {
+      return rawUrl;
+    }
+    if (rawUrl.startsWith('https://') || rawUrl.startsWith('http://')) {
+      return rawUrl;
+    }
+    return `/api-backend/uploads/${rawUrl.replace(/^\/+/, '')}`;
   };
 
   if (loading) {

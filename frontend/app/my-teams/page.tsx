@@ -69,9 +69,21 @@ export default function MyTeamsPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const getPortraitUrl = (profileUrl?: string) => {
-    if (profileUrl && profileUrl.startsWith('http')) return profileUrl;
-    return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
+  const getPortraitUrl = (creator: any) => {
+    const rawUrl = typeof creator === 'string' ? creator : creator?.profile_image_url;
+    if (!rawUrl || typeof rawUrl !== 'string') {
+      return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
+    }
+    if (rawUrl.includes('localhost:5000/uploads/') || rawUrl.includes('127.0.0.1:5000/uploads/')) {
+      return rawUrl.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/uploads\//, '/api-backend/uploads/');
+    }
+    if (rawUrl.startsWith('/api-backend/') || rawUrl.startsWith('/uploads/')) {
+      return rawUrl;
+    }
+    if (rawUrl.startsWith('https://') || rawUrl.startsWith('http://')) {
+      return rawUrl;
+    }
+    return `/api-backend/uploads/${rawUrl.replace(/^\/+/, '')}`;
   };
 
   if (loading) {

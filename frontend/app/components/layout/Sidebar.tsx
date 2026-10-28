@@ -31,7 +31,7 @@ export default function Sidebar() {
         </div>
         <div>
           <h1 className="text-base font-bold text-text-primary tracking-tight">Creator11</h1>
-          <p className="text-[9px] text-text-muted tracking-widest uppercase">Fantasy League</p>
+          <p className="text-[8px] text-neon-cyan font-bold tracking-widest uppercase">Creator Entertainment League</p>
         </div>
       </Link>
 

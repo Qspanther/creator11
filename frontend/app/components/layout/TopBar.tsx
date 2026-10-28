@@ -88,7 +88,7 @@ export default function TopBar() {
             {isAdminRoute ? (
               <span className="text-[9px] text-neon-cyan font-bold tracking-wider uppercase">Console</span>
             ) : (
-              <span className="text-[9px] text-neon-purple font-semibold tracking-wider uppercase">Battle League</span>
+              <span className="text-[9px] text-neon-purple font-semibold tracking-wider uppercase">Creator Entertainment League</span>
             )}
           </div>
         </Link>

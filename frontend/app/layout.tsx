@@ -12,9 +12,9 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Creator11 — Fantasy Sports for Content Creators",
+  title: "Creator11 — Creator Entertainment League",
   description: "Build your fantasy team of verified YouTube creators. Compete in tournaments, earn points from real creator performance, and win prizes.",
-  keywords: "fantasy sports, youtube creators, content creator league, creator11",
+  keywords: "creator entertainment league, youtube creators, creator11, cel",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

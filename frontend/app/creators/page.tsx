@@ -169,15 +169,15 @@ export default function CreatorsPage() {
                 <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/5">
                   <div className="text-center p-2 rounded-xl bg-white/[0.02]">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Views</p>
-                    <p className="text-xs font-black text-white">{((creator.base_views || 1000000) / 1000000).toFixed(1)}M</p>
+                    <p className="text-xs font-black text-white">{(creator.base_views || 0).toLocaleString()}</p>
                   </div>
                   <div className="text-center p-2 rounded-xl bg-white/[0.02]">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Likes</p>
-                    <p className="text-xs font-black text-white">{((creator.base_likes || 50000) / 1000).toFixed(0)}K</p>
+                    <p className="text-xs font-black text-white">{(creator.base_likes || 0).toLocaleString()}</p>
                   </div>
                   <div className="text-center p-2 rounded-xl bg-white/[0.02]">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Followers</p>
-                    <p className="text-xs font-black text-white">{((creator.base_followers || 400000) / 1000).toFixed(0)}K</p>
+                    <p className="text-xs font-black text-white">{(creator.base_followers || 0).toLocaleString()}</p>
                   </div>
                 </div>
               </motion.div>
@@ -250,13 +250,13 @@ export default function CreatorsPage() {
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Followers</p>
                     <p className="text-base font-black text-neon-cyan">
-                      {((modalCreator.base_followers || 850000) / 1000).toFixed(0)}K
+                      {(modalCreator.base_followers || 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Total Views</p>
                     <p className="text-base font-black text-neon-gold">
-                      {((modalCreator.base_views || 2500000) / 1000000).toFixed(1)}M
+                      {(modalCreator.base_views || 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">

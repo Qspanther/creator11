@@ -20,7 +20,7 @@ export default function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="glass-sidebar fixed left-0 top-0 h-full w-[240px] z-40 flex flex-col py-6">
+    <aside className="hidden md:flex glass-sidebar fixed left-0 top-0 h-full w-[240px] z-40 flex-col py-6">
       {/* Admin Branding */}
       <div className="px-6 mb-8">
         <div className="flex items-center gap-3">

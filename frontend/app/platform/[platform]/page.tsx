@@ -206,15 +206,15 @@ export default function PlatformLobbyPage({ params }: { params: Promise<{ platfo
                       <div className="grid grid-cols-3 gap-2 text-center text-[10px] border-t border-white/5 pt-2.5">
                         <div>
                           <p className="text-text-muted">Followers</p>
-                          <p className="font-bold text-white">{((creator.base_followers || 100000) / 1000).toFixed(0)}k</p>
+                          <p className="font-bold text-white">{(creator.base_followers || 0).toLocaleString()}</p>
                         </div>
                         <div>
                           <p className="text-text-muted">Avg Views</p>
-                          <p className="font-bold text-white">{((creator.base_views || 500000) / 1000000).toFixed(1)}M</p>
+                          <p className="font-bold text-white">{(creator.base_views || 0).toLocaleString()}</p>
                         </div>
                         <div>
                           <p className="text-text-muted">Avg Likes</p>
-                          <p className="font-bold text-white">{((creator.base_likes || 25000) / 1000).toFixed(0)}k</p>
+                          <p className="font-bold text-white">{(creator.base_likes || 0).toLocaleString()}</p>
                         </div>
                       </div>
                     </div>
@@ -347,13 +347,13 @@ export default function PlatformLobbyPage({ params }: { params: Promise<{ platfo
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Followers</p>
                     <p className="text-sm font-black text-neon-cyan">
-                      {((modalCreator.base_followers || 850000) / 1000).toFixed(0)}K
+                      {(modalCreator.base_followers || 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Views</p>
                     <p className="text-sm font-black text-neon-gold">
-                      {((modalCreator.base_views || 2500000) / 1000000).toFixed(1)}M
+                      {(modalCreator.base_views || 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">

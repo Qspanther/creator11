@@ -26,6 +26,13 @@ const { generateMockStats } = require('./mock-data-generator');
  * @returns {Promise<{views: number, likes: number, followers: number}>}
  */
 async function fetchCreatorStats(creator, timestamp = new Date()) {
+  if (creator.platform === 'youtube') {
+    return {
+      views: creator.base_views || 0,
+      likes: creator.base_likes || 0,
+      followers: creator.base_followers || 0,
+    };
+  }
   if (config.USE_MOCK_CREATOR_DATA) {
     return generateMockStats(creator, timestamp);
   }

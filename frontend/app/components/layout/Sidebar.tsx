@@ -23,7 +23,7 @@ export default function Sidebar() {
   const { user } = useAuth();
 
   return (
-    <aside className="glass-sidebar fixed left-0 top-0 h-full w-[220px] z-40 flex flex-col py-6">
+    <aside className="hidden md:flex glass-sidebar fixed left-0 top-0 h-full w-[220px] z-40 flex-col py-6">
       {/* Logo */}
       <Link href="/dashboard" className="flex items-center gap-3 px-6 mb-8">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center">

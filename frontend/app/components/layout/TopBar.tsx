@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
 import { apiGet, apiPut } from '../../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, Wallet, User, LogOut, Check, Trophy, Info } from 'lucide-react';
+import { Search, Bell, Wallet, User, LogOut, Check, Trophy, Info, Gamepad2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface Notification {
@@ -17,6 +18,8 @@ interface Notification {
 }
 
 export default function TopBar() {
+  const pathname = usePathname();
+  const isAdminRoute = pathname?.startsWith('/admin');
   const { user, token, logout, isAuthenticated } = useAuth();
   const [balance, setBalance] = useState<number | null>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -64,15 +67,35 @@ export default function TopBar() {
   };
 
   return (
-    <header className="fixed top-0 left-[220px] right-0 h-16 z-30 flex items-center justify-between px-6"
+    <header
+      className={`fixed top-0 left-0 right-0 h-16 z-30 flex items-center justify-between px-3.5 sm:px-6 transition-all duration-200 ${
+        isAdminRoute ? 'md:left-[240px]' : 'md:left-[220px]'
+      }`}
       style={{
-        background: 'rgba(10, 10, 15, 0.6)',
-        backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+        background: 'rgba(10, 10, 15, 0.8)',
+        backdropFilter: 'blur(24px)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
       }}
     >
-      {/* Search */}
-      <div className="relative w-72">
+      {/* Mobile Branding (Visible only on mobile screens) */}
+      <div className="flex items-center gap-2 md:hidden">
+        <Link href={isAdminRoute ? '/admin' : '/dashboard'} className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center shadow-lg shadow-neon-purple/20">
+            <Gamepad2 size={16} className="text-white" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-black text-white tracking-tight leading-none">Creator11</span>
+            {isAdminRoute ? (
+              <span className="text-[9px] text-neon-cyan font-bold tracking-wider uppercase">Console</span>
+            ) : (
+              <span className="text-[9px] text-neon-purple font-semibold tracking-wider uppercase">Battle League</span>
+            )}
+          </div>
+        </Link>
+      </div>
+
+      {/* Desktop Search (Hidden on small mobile screens to save precious space) */}
+      <div className="hidden sm:block relative w-64 md:w-72">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
         <input
           type="text"
@@ -81,20 +104,22 @@ export default function TopBar() {
         />
       </div>
 
-      {/* Right section */}
-      <div className="flex items-center gap-4 relative">
+      {/* Right Section */}
+      <div className="flex items-center gap-2 sm:gap-4 relative">
         {isAuthenticated ? (
           <>
-            {/* Wallet Balance */}
+            {/* Wallet Balance Pill */}
             <Link href="/wallet">
               <motion.div
                 whileHover={{ scale: 1.03 }}
-                className="flex items-center gap-2 px-4 py-2 glass rounded-xl cursor-pointer"
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 glass rounded-xl cursor-pointer border border-white/10"
               >
-                <Wallet size={14} className="text-neon-gold" />
-                <span className="label-upper text-neon-gold">Balance</span>
-                <span className="text-sm font-bold text-text-primary">
-                  {balance !== null ? `${parseFloat(balance.toString()).toFixed(2)} USDT` : '—'}
+                <Wallet size={14} className="text-neon-gold shrink-0" />
+                <span className="hidden sm:inline label-upper text-neon-gold text-[10px]">Balance</span>
+                <span className="text-xs sm:text-sm font-bold text-text-primary">
+                  {balance !== null ? `${parseFloat(balance.toString()).toFixed(1)}` : '—'}
+                  <span className="text-[10px] text-neon-gold ml-1 font-semibold">USDT</span>
                 </span>
               </motion.div>
             </Link>
@@ -109,6 +134,7 @@ export default function TopBar() {
                   setShowProfileMenu(false);
                 }}
                 className="relative p-2 rounded-xl hover:bg-white/[0.04] transition-colors"
+                aria-label="Notifications"
               >
                 <Bell size={18} className="text-text-secondary" />
                 {unreadCount > 0 && (
@@ -126,10 +152,10 @@ export default function TopBar() {
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 top-14 w-80 glass-strong rounded-xl shadow-2xl overflow-hidden flex flex-col z-50 border border-white/10"
+                    className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-16 w-auto sm:w-80 glass-strong rounded-2xl shadow-2xl overflow-hidden flex flex-col z-50 border border-white/10"
                   >
                     <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/40">
-                      <h3 className="font-bold">Notifications</h3>
+                      <h3 className="font-bold text-sm">Notifications</h3>
                       {unreadCount > 0 && (
                         <button onClick={handleMarkAllRead} className="text-xs text-neon-cyan hover:underline flex items-center gap-1">
                           <Check size={12}/> Mark all read
@@ -165,7 +191,7 @@ export default function TopBar() {
               </AnimatePresence>
             </div>
 
-            {/* Profile */}
+            {/* Profile Avatar & Menu */}
             <div className="relative">
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -174,7 +200,8 @@ export default function TopBar() {
                   setShowProfileMenu(!showProfileMenu);
                   setShowNotifMenu(false);
                 }}
-                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-white/[0.04]"
+                className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/[0.04]"
+                aria-label="User Profile"
               >
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center">
                   <span className="text-xs font-bold text-white">
@@ -189,14 +216,14 @@ export default function TopBar() {
                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 top-14 w-48 glass-strong p-2 rounded-xl z-50 border border-white/10 shadow-2xl"
+                    className="absolute right-0 top-14 w-52 glass-strong p-2 rounded-xl z-50 border border-white/10 shadow-2xl"
                   >
                     <div className="px-3 py-2 border-b border-white/[0.06] mb-1">
-                      <p className="text-sm font-medium text-text-primary">{user?.name}</p>
+                      <p className="text-sm font-semibold text-text-primary">{user?.name}</p>
                       <p className="text-xs text-text-muted truncate">{user?.email}</p>
                     </div>
                     <Link href="/settings" onClick={() => setShowProfileMenu(false)} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.04] text-sm text-text-secondary">
-                      <User size={14} /> Profile
+                      <User size={14} /> Profile & Settings
                     </Link>
                     <button
                       onClick={logout}
@@ -210,12 +237,12 @@ export default function TopBar() {
             </div>
           </>
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/login">
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                className="px-5 py-2 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
+                className="px-3 sm:px-5 py-2 text-xs sm:text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
               >
                 Log In
               </motion.button>
@@ -224,7 +251,7 @@ export default function TopBar() {
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                className="px-5 py-2 text-sm font-medium bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl"
+                className="px-3.5 sm:px-5 py-2 text-xs sm:text-sm font-medium bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl shadow-md shadow-neon-purple/20"
               >
                 Sign Up
               </motion.button>

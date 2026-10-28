@@ -1,11 +1,12 @@
 'use client';
 
-import { ReactNode, Suspense, lazy, useEffect, useState } from 'react';
+import { ReactNode, Suspense, lazy, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import Sidebar from './components/layout/Sidebar';
 import AdminSidebar from './components/layout/AdminSidebar';
 import TopBar from './components/layout/TopBar';
+import MobileBottomNav from './components/layout/MobileBottomNav';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // Lazy load 3D background for performance
@@ -19,14 +20,13 @@ function AppShell({ children }: { children: ReactNode }) {
   const { isAuthenticated, loading, user } = useAuth();
   const isPublicPage = publicPaths.includes(pathname);
   const showAppShell = isAuthenticated && !isPublicPage;
-  const isAdminRoute = pathname.startsWith('/admin');
+  const isAdminRoute = pathname?.startsWith('/admin');
 
   useEffect(() => {
     if (!loading) {
       if (!isAuthenticated && !isPublicPage) {
         router.push('/login');
       } else if (isAuthenticated && isPublicPage) {
-        // If they are an admin, dashboard could be regular or admin, but let's default to regular dashboard for now unless they click admin panel
         router.push('/dashboard');
       }
       if (isAdminRoute && user?.role !== 'admin') {
@@ -45,40 +45,45 @@ function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <>
-      {/* 3D Background — always mounted */}
+      {/* 3D Background */}
       <Suspense fallback={null}>
         <ParticleBackground />
       </Suspense>
 
       {showAppShell ? (
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen w-full max-w-full overflow-x-hidden">
           {isAdminRoute ? <AdminSidebar /> : <Sidebar />}
-          <div className="flex-1 ml-[220px]">
+          <div
+            className={`flex-1 min-w-0 transition-all duration-200 ${
+              isAdminRoute ? 'ml-0 md:ml-[240px]' : 'ml-0 md:ml-[220px]'
+            }`}
+          >
             <TopBar />
-            <main className="pt-20 px-6 pb-8 relative z-10">
+            <main className="pt-20 px-3 sm:px-6 pb-24 md:pb-8 relative z-10 w-full max-w-full overflow-x-hidden">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={pathname}
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -12 }}
-                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
                 >
                   {children}
                 </motion.div>
               </AnimatePresence>
             </main>
           </div>
+          <MobileBottomNav />
         </div>
       ) : (
-        <div className="relative z-10">
+        <div className="relative z-10 w-full min-h-screen overflow-x-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
+              transition={{ duration: 0.25 }}
             >
               {children}
             </motion.div>

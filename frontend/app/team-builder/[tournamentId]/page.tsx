@@ -55,6 +55,7 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
 
   // Profile modal state
   const [modalCreator, setModalCreator] = useState<Creator | null>(null);
+  const [mobileTab, setMobileTab] = useState<'roster' | 'studio'>('roster');
 
   useEffect(() => {
     if (!token) return;
@@ -338,11 +339,46 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
         </div>
       </motion.div>
 
+      {/* Mobile APK Tab Switcher (Mobile Only) */}
+      <div className="flex lg:hidden bg-obsidian-card/90 p-1 rounded-2xl border border-white/10 mb-4 sticky top-16 z-20 backdrop-blur-xl shadow-xl">
+        <button
+          type="button"
+          onClick={() => setMobileTab('roster')}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            mobileTab === 'roster'
+              ? 'bg-neon-cyan text-black shadow-md shadow-neon-cyan/25 font-black'
+              : 'text-text-secondary hover:text-white'
+          }`}
+        >
+          <Users size={15} />
+          <span>Select Creators</span>
+          <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-black/40 text-white font-mono font-bold">
+            {filteredCreators.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileTab('studio')}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+            mobileTab === 'studio'
+              ? 'bg-gradient-to-r from-neon-purple to-neon-cyan text-white shadow-md shadow-neon-purple/25 font-black'
+              : 'text-text-secondary hover:text-white'
+          }`}
+        >
+          <Sparkles size={15} />
+          <span>Holo Studio</span>
+          <span className="px-2 py-0.5 rounded-md text-[10px] bg-white/20 text-white font-mono font-bold">
+            {selected.size}/{totalRequired}
+          </span>
+        </button>
+      </div>
+
       {/* 2-COLUMN SPLIT LAYOUT */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
         {/* LEFT COLUMN: Filters & Creators Roster (60%) */}
-        <div className="lg:col-span-7 xl:col-span-7 space-y-6">
+        <div className={`space-y-6 lg:col-span-7 xl:col-span-7 ${mobileTab === 'studio' ? 'hidden lg:block' : 'block'}`}>
           
           {/* Controls: Categories, Search, Sort */}
           <div className="glass-card p-5 space-y-4">
@@ -527,7 +563,7 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
                           </span>
                           <span className="flex items-center gap-1">
                             <Eye size={12} className="text-neon-cyan" />
-                            {((creator.base_views || 1200000) / 1000000).toFixed(1)}M Views
+                            {(creator.base_views || 0).toLocaleString()} Views
                           </span>
                           <span className="flex items-center gap-1">
                             <TrendingUp size={12} className="text-success" />
@@ -568,7 +604,7 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
         </div>
 
         {/* RIGHT COLUMN: Live Holographic Studio Stage (40% Sticky) */}
-        <div className="lg:col-span-5 xl:col-span-5 sticky top-20 space-y-4">
+        <div className={`space-y-4 lg:col-span-5 xl:col-span-5 lg:sticky lg:top-20 ${mobileTab === 'roster' ? 'hidden lg:block' : 'block'}`}>
           <div className="studio-stage p-6">
             
             {/* Stage Grid Overlay */}
@@ -586,7 +622,14 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
                 </div>
               </div>
 
-              <div className="text-right">
+              <div className="text-right flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileTab('roster')}
+                  className="lg:hidden px-2.5 py-1 rounded-full bg-white/10 text-[10px] font-bold text-white hover:bg-white/20 transition-colors"
+                >
+                  ← Roster
+                </button>
                 <span className="text-xs font-bold text-white bg-black/50 px-3 py-1 rounded-full border border-neon-cyan/30">
                   {selected.size} / {totalRequired} Slotted
                 </span>
@@ -812,14 +855,14 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Followers</p>
                     <p className="text-base font-black text-neon-cyan">
-                      {((modalCreator.base_followers || 850000) / 1000).toFixed(0)}K
+                      {(modalCreator.base_followers || 0).toLocaleString()}
                     </p>
                   </div>
 
                   <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
                     <p className="text-[10px] text-text-muted font-bold uppercase">Total Views</p>
                     <p className="text-base font-black text-neon-gold">
-                      {((modalCreator.base_views || 2500000) / 1000000).toFixed(1)}M
+                      {(modalCreator.base_views || 0).toLocaleString()}
                     </p>
                   </div>
 
@@ -876,6 +919,30 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
           </div>
         )}
       </AnimatePresence>
+      {/* Sticky Mobile Floating Team Action Bar (Dream11 APK Style) */}
+      {mobileTab === 'roster' && (
+        <div className="lg:hidden fixed bottom-18 left-3 right-3 z-40">
+          <div className="glass-strong p-3 rounded-2xl border border-neon-cyan/30 shadow-[0_10px_35px_rgba(0,0,0,0.8)] flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black text-white flex items-center gap-1.5">
+                <Users size={14} className="text-neon-cyan" />
+                <span>{selected.size} / {totalRequired} Creators</span>
+              </p>
+              <p className="text-[10px] text-neon-gold font-bold">
+                {(maxCredits - creditsUsed).toFixed(1)} Credits Left
+              </p>
+            </div>
+
+            <button
+              onClick={() => setMobileTab('studio')}
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-neon-purple to-neon-cyan text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-neon-purple/30 cursor-pointer"
+            >
+              <span>{isReadyToSave ? 'Assign C/VC & Save' : 'View Stage'}</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

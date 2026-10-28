@@ -42,7 +42,6 @@ const config = {
 
   // ─── Prize Distribution Slabs ───
   // Rank percentile ranges and their share of the total prize pool.
-  // Must sum to <= 1.0 (remainder is platform margin).
   PRIZE_DISTRIBUTION_SLABS: [
     { minRankPercent: 0,   maxRankPercent: 1,   payoutPercent: 0.30 },  // Top 1% gets 30%
     { minRankPercent: 1,   maxRankPercent: 5,   payoutPercent: 0.25 },  // Next 4% gets 25%
@@ -53,12 +52,14 @@ const config = {
   ],
 
   // ─── Mock Data Toggle ───
-  // Set to false and provide real API keys in env vars to use live data
   USE_MOCK_CREATOR_DATA: false,
 
   // ─── API Keys (from environment) ───
   YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
   INSTAGRAM_ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN || '',
+
+  // ─── Bot Manager Network Secret Key ───
+  BOT_API_KEY: process.env.BOT_API_KEY || 'c11_bot_mgr_sec_9938a7fbc21d49e',
 
   // ─── Database ───
   DB_DIALECT: 'sqlite',

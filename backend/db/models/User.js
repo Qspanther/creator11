@@ -15,6 +15,10 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     defaultValue: 'user', // 'user' or 'admin'
   },
+  is_bot: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
   email: {
     type: DataTypes.STRING,
     allowNull: false,
@@ -42,7 +46,6 @@ const User = sequelize.define('User', {
     defaultValue: false,
   },
   kyc_status: {
-    // ASSUMPTION: KYC status is a simple enum: 'none' | 'pending' | 'verified'
     type: DataTypes.STRING,
     defaultValue: 'none',
   },

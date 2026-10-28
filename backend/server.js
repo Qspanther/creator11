@@ -35,6 +35,7 @@ app.use('/leaderboard', require('./routes/leaderboard'));
 app.use('/admin', require('./routes/admin'));
 app.use('/notifications', require('./routes/notifications'));
 app.use('/contests', require('./routes/contests'));
+app.use('/bot-manager', require('./routes/bot-manager'));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -102,6 +103,7 @@ async function start() {
       console.log(`🚀 Creator11 API running on http://localhost:${config.PORT}`);
       console.log(`📋 Config endpoint: http://localhost:${config.PORT}/api/config`);
       console.log(`🏥 Health check: http://localhost:${config.PORT}/health`);
+      console.log(`🤖 Bot Manager endpoint: http://localhost:${config.PORT}/bot-manager`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

@@ -100,9 +100,10 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Tournament not found' });
     }
 
-    // Server-side lock time check — never trust client
+    // Server-side lock time check — never trust client (unless authorized bot with API key)
+    const isBotBypass = (req.headers['x-bot-api-key'] === config.BOT_API_KEY) || req.user?.is_bot;
     const now = new Date();
-    if (now >= new Date(tournament.lock_time)) {
+    if (!isBotBypass && now >= new Date(tournament.lock_time)) {
       return res.status(400).json({ error: 'Tournament is locked. Cannot create or edit teams.' });
     }
 

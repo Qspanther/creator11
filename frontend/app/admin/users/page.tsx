@@ -159,7 +159,7 @@ export default function AdminUsersPage() {
                       <div className="glass p-5 rounded-xl border border-neon-gold/20 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10"><Wallet size={64}/></div>
                         <p className="text-text-muted text-sm mb-1">Wallet Balance</p>
-                        <p className="text-3xl font-bold text-neon-gold">{parseFloat(profileData.wallet?.balance || '0').toFixed(2)} USDT</p>
+                        <p className="text-3xl font-bold text-neon-gold">₹{parseFloat(profileData.wallet?.balance || '0').toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                       </div>
                       <div className="glass p-5 rounded-xl border border-neon-purple/20 relative overflow-hidden">
                         <div className="absolute top-0 right-0 p-4 opacity-10"><Trophy size={64}/></div>
@@ -195,7 +195,7 @@ export default function AdminUsersPage() {
                                     <p className="text-xs text-text-muted">{new Date(tx.createdAt).toLocaleString()}</p>
                                   </div>
                                   <p className={`font-bold ${['deposit', 'prize'].includes(tx.type) ? 'text-neon-green' : 'text-red-400'}`}>
-                                    {['deposit', 'prize'].includes(tx.type) ? '+' : '-'}{parseFloat(tx.amount).toFixed(2)} USDT
+                                    {['deposit', 'prize'].includes(tx.type) ? '+' : '-'}₹{parseFloat(tx.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </p>
                                 </div>
                               ))}

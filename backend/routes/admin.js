@@ -167,7 +167,8 @@ router.get('/tournaments', async (req, res) => {
 
 router.post('/tournaments', async (req, res) => {
   try {
-    const t = await Tournament.create(req.body);
+    const data = { ...req.body, entry_fee: 99.00 };
+    const t = await Tournament.create(data);
 
     await Notification.create({
       title: 'New Battle League Available',

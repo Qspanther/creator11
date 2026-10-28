@@ -28,8 +28,9 @@ router.post('/:id/join', authenticate, async (req, res) => {
     const wallet = await Wallet.findOne({ where: { user_id: userId }, transaction });
     if (!wallet) throw new Error("Wallet not found");
 
-    if (parseFloat(wallet.balance) < parseFloat(contest.entry_fee)) {
-      throw new Error("Insufficient balance");
+    const fee = parseFloat(contest.entry_fee) || 99.00;
+    if (parseFloat(wallet.balance) < fee) {
+      return res.status(400).json({ error: `Insufficient balance. ₹${fee.toFixed(2)} required to join.`, requiresDeposit: true, requiredAmount: fee, redirectTo: '/wallet?required=99' });
     }
 
     // Check if already joined

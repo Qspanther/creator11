@@ -114,7 +114,7 @@ export default function MyTeamsPage() {
           <Shield size={48} className="mx-auto text-text-muted mb-4 opacity-40" />
           <h3 className="text-lg font-bold text-white mb-2">No Teams Formed Yet</h3>
           <p className="text-text-secondary text-sm mb-6 max-w-md mx-auto">
-            Join one of the active Battle Leagues (6h, 24h, 48h, 72h) and pick your 11 creator lineup to win USDT prize pools!
+            Join one of the active Battle Leagues (6h, 24h, 48h, 72h) and pick your 11 creator lineup to win ₹ INR cash prize pools with 100% Never-Lose Guarantee!
           </p>
           <Link href="/tournaments">
             <motion.button

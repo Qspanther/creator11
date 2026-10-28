@@ -174,7 +174,7 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
           {tournament && (
             <div className="glass-card px-4 py-2.5 rounded-2xl border border-white/10 text-right shrink-0">
               <p className="text-[10px] uppercase tracking-wider text-text-muted font-bold">Prize Pool</p>
-              <p className="text-xl font-black text-neon-gold">{tournament.prizePool.toLocaleString()} USDT</p>
+              <p className="text-xl font-black text-neon-gold">₹{tournament.prizePool.toLocaleString('en-IN')}</p>
             </div>
           )}
         </div>
@@ -361,9 +361,15 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
                     </div>
 
                     {showRankings && entry.prizeAmount > 0 && (
-                      <p className="text-[11px] font-bold text-neon-gold mt-0.5">
-                        +₹{entry.prizeAmount.toLocaleString('en-IN')} Won
-                      </p>
+                      entry.prizeAmount > 99 ? (
+                        <p className="text-[11px] font-bold text-neon-gold mt-0.5">
+                          🏆 +₹{entry.prizeAmount.toLocaleString('en-IN')} Won
+                        </p>
+                      ) : (
+                        <p className="text-[11px] font-semibold text-emerald-400 mt-0.5">
+                          🛡️ ₹99.00 100% Refunded
+                        </p>
+                      )
                     )}
                   </div>
                 </div>

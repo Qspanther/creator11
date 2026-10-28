@@ -130,12 +130,18 @@ router.post('/', authenticate, async (req, res) => {
         return res.status(400).json({ error: 'Wallet not found' });
       }
 
-      const balance = parseFloat(wallet.balance);
-      const entryFee = parseFloat(tournament.entry_fee);
+      const balance = parseFloat(wallet.balance) || 0;
+      const entryFee = 99.00; // Strictly ₹99 INR for all tournaments
 
       if (balance < entryFee) {
         await t.rollback();
-        return res.status(400).json({ error: `Insufficient balance. Need ${entryFee} USDT, have ${balance} USDT` });
+        return res.status(400).json({
+          error: `Insufficient wallet balance. ₹99.00 is required to lock and enter this contest, but your wallet balance is ₹${balance.toFixed(2)}.`,
+          requiresDeposit: true,
+          requiredAmount: 99.00,
+          currentBalance: balance,
+          redirectTo: '/wallet?required=99'
+        });
       }
 
       // Deduct entry fee
@@ -148,7 +154,7 @@ router.post('/', authenticate, async (req, res) => {
         amount: -entryFee,
         status: 'completed',
         reference_tournament_id: tournamentId,
-        description: `Entry fee for ${tournament.name}`,
+        description: `Entry fee (₹99.00) for ${tournament.name}`,
       }, { transaction: t });
 
       // Create team

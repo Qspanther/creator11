@@ -152,9 +152,15 @@ export default function ScorecardModal({ teamId, onClose }: ScorecardModalProps)
                           {data.rank === 1 ? '👑 Rank #1 Winner' : `Rank #${data.rank}`}
                         </span>
                         {data.prizeWon > 0 && (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-neon-gold text-black shadow-md shadow-neon-gold/20">
-                            🏆 +{data.prizeWon.toLocaleString()} USDT Won
-                          </span>
+                          data.prizeWon > 99 ? (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-neon-gold text-black shadow-md shadow-neon-gold/20">
+                              🏆 +₹{data.prizeWon.toLocaleString('en-IN')} Won
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                              🛡️ ₹99.00 100% Refunded
+                            </span>
+                          )
                         )}
                       </>
                     ) : (

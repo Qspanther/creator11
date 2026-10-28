@@ -4,11 +4,13 @@ import { useState, useEffect, use, useMemo } from 'react';
 import { useAuth } from '../../lib/auth-context';
 import { apiGet, apiPost } from '../../lib/api';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Crown, Star, Check, X, Search,
   Coins, Users, ArrowRight, Info, ExternalLink,
-  Flame, Sparkles, TrendingUp, Eye, Heart, Tv, Camera, Lock as LockIcon
+  Flame, Sparkles, TrendingUp, Eye, Heart, Tv, Camera, Lock as LockIcon,
+  AlertCircle, ShieldCheck
 } from 'lucide-react';
 
 interface Creator {
@@ -52,6 +54,7 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [existingTeam, setExistingTeam] = useState<string | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
 
   // Profile modal state
   const [modalCreator, setModalCreator] = useState<Creator | null>(null);
@@ -79,6 +82,15 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
         if (team.captain_creator_id) setCaptainId(team.captain_creator_id);
         if (team.vice_captain_creator_id) setViceCaptainId(team.vice_captain_creator_id);
       }
+
+      // Fetch wallet balance to verify ₹99 entry fee requirement
+      apiGet('/wallet/balance', token)
+        .then(wb => {
+          if (wb && wb.balance !== undefined) {
+            setWalletBalance(parseFloat(wb.balance));
+          }
+        })
+        .catch(() => {});
     }).catch(() => setLoading(false));
   }, [token, tournamentId, sortBy]);
 
@@ -204,6 +216,19 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
 
   const handleSave = async () => {
     if (!isReadyToSave) return;
+
+    // Strict ₹99 entry fee pre-check for entering tournament
+    if (!existingTeam) {
+      const entryFee = 99.00;
+      if (walletBalance !== null && walletBalance < entryFee) {
+        setError(`Insufficient wallet balance: ₹99.00 is required to lock and enter this contest. Your current balance is ₹${walletBalance.toFixed(2)}. Redirecting to deposit...`);
+        setTimeout(() => {
+          router.push(`/wallet?required=99&reason=contest_entry&tournamentId=${tournamentId}`);
+        }, 1000);
+        return;
+      }
+    }
+
     setSaving(true);
     setError('');
 
@@ -224,16 +249,27 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Update failed');
       } else {
-        await apiPost('/teams', {
+        const res = await apiPost('/teams', {
           tournamentId,
           creatorIds: Array.from(selected),
           captainId,
           viceCaptainId,
         }, token);
+
+        if (res?.requiresDeposit || res?.error?.includes('Insufficient wallet balance')) {
+          router.push(`/wallet?required=99&reason=contest_entry&tournamentId=${tournamentId}`);
+          return;
+        }
       }
       router.push('/my-teams');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to save team');
+      const errMsg = err instanceof Error ? err.message : 'Failed to save team';
+      setError(errMsg);
+      if (errMsg.toLowerCase().includes('insufficient') || errMsg.includes('₹99') || errMsg.toLowerCase().includes('deposit')) {
+        setTimeout(() => {
+          router.push(`/wallet?required=99&reason=contest_entry&tournamentId=${tournamentId}`);
+        }, 1200);
+      }
     } finally {
       setSaving(false);
     }
@@ -774,6 +810,38 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
               </div>
             )}
 
+            {/* Wallet Balance Status Indicator */}
+            {!existingTeam && walletBalance !== null && (
+              <div className={`relative z-10 p-3 rounded-xl border mb-3 flex items-center justify-between text-xs ${
+                walletBalance < 99
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                  : 'bg-neon-green/10 border-neon-green/30 text-neon-green'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {walletBalance < 99 ? (
+                    <AlertCircle size={16} className="text-amber-400 shrink-0" />
+                  ) : (
+                    <ShieldCheck size={16} className="text-neon-green shrink-0" />
+                  )}
+                  <div>
+                    <span className="font-bold text-white">Entry Fee: ₹99.00</span>
+                    <span className="text-[10px] block text-white/70">100% Never-Lose Money-Back Guarantee</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono font-bold block text-white">Bal: ₹{walletBalance.toFixed(2)}</span>
+                  {walletBalance < 99 && (
+                    <Link
+                      href={`/wallet?required=99&tournamentId=${tournamentId}`}
+                      className="text-[10px] text-amber-300 underline font-bold hover:text-white"
+                    >
+                      + Deposit ₹99
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Save Team CTA */}
             <motion.button
               whileHover={isReadyToSave ? { scale: 1.02 } : {}}
@@ -782,13 +850,19 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
               disabled={!isReadyToSave || saving}
               className={`relative z-10 w-full py-4 rounded-2xl text-sm font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 ${
                 isReadyToSave
-                  ? 'bg-gradient-to-r from-neon-cyan via-blue-500 to-neon-purple text-black font-black shadow-xl shadow-neon-cyan/25'
+                  ? walletBalance !== null && walletBalance < 99 && !existingTeam
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black shadow-xl shadow-amber-500/25'
+                    : 'bg-gradient-to-r from-neon-cyan via-blue-500 to-neon-purple text-black font-black shadow-xl shadow-neon-cyan/25'
                   : 'bg-white/5 text-text-muted cursor-not-allowed border border-white/10'
               }`}
             >
               {saving ? 'Registering Battle Team...' : (
                 <>
-                  <span>{existingTeam ? 'Update Battle Lineup' : 'Lock & Enter Battle Team'}</span>
+                  {walletBalance !== null && walletBalance < 99 && !existingTeam ? (
+                    <span>Deposit ₹99 & Lock Team</span>
+                  ) : (
+                    <span>{existingTeam ? 'Update Battle Lineup' : 'Lock & Enter Battle Team'}</span>
+                  )}
                   <ArrowRight size={16} />
                 </>
               )}

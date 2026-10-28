@@ -52,7 +52,7 @@ export default function WalletPage() {
   const [config, setConfig] = useState<WalletConfig>({
     currency: 'INR',
     currencySymbol: '₹',
-    minDeposit: 100,
+    minDeposit: 99,
     maxDeposit: 100000,
     minWithdrawal: 100,
     upi: {
@@ -69,7 +69,8 @@ export default function WalletPage() {
   });
 
   // Deposit Form State (INR UPI)
-  const [depositAmount, setDepositAmount] = useState('500');
+  const [depositAmount, setDepositAmount] = useState('99');
+  const [requiredAmount, setRequiredAmount] = useState<string | null>(null);
   const [depositUtr, setDepositUtr] = useState('');
   const [senderUpi, setSenderUpi] = useState('');
   const [depositMethod, setDepositMethod] = useState<'UPI' | 'BANK'>('UPI');
@@ -94,6 +95,18 @@ export default function WalletPage() {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const req = params.get('required');
+      if (req) {
+        setRequiredAmount(req);
+        setDepositAmount(req);
+        setActiveTab('deposit');
+      }
+    }
+  }, []);
 
   const fetchData = () => {
     if (!token) return;
@@ -428,8 +441,21 @@ export default function WalletPage() {
             <label className="block text-xs font-black text-text-muted uppercase tracking-wider mb-2">
               Select or Enter Deposit Amount (₹)
             </label>
+            {/* Contest Entry Deposit Banner if redirected */}
+            {requiredAmount && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-transparent border border-amber-500/40 mb-4 flex items-start gap-3">
+                <ShieldCheck size={22} className="text-amber-400 mt-0.5 shrink-0" />
+                <div>
+                  <h4 className="font-black text-white text-sm">Contest Entry Fee: ₹{requiredAmount}</h4>
+                  <p className="text-xs text-text-secondary mt-1">
+                    Deposit ₹{requiredAmount} via UPI to lock your 11-creator battle squad. Under our <strong>100% Never-Lose Guarantee</strong>, if your team does not win a top prize, your full ₹99 is safely refunded back to your wallet!
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-5 gap-2 mb-3">
-              {[100, 500, 1000, 2000, 5000].map(amt => (
+              {[99, 198, 495, 999, 2000].map(amt => (
                 <button
                   key={amt}
                   type="button"

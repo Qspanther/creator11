@@ -9,7 +9,7 @@ const router = express.Router();
 const DEFAULT_INR_CONFIG = {
   currency: 'INR',
   currencySymbol: '₹',
-  minDeposit: 100,
+  minDeposit: 99,
   maxDeposit: 100000,
   minWithdrawal: 100,
   upi: {

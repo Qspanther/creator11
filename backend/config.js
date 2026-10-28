@@ -85,12 +85,15 @@ const config = {
   // ─── Leaderboard Polling ───
   LEADERBOARD_POLL_INTERVAL_MS: 5000,
 
-  // ─── Tournament Entry Fees & Prize Pools ───
+  // ─── Tournament Entry Fees & Prize Pools (Fixed ₹99 with 100% Never-Lose Guarantee) ───
+  FIXED_ENTRY_FEE: 99.00,
   DEFAULT_ENTRY_FEES: {
-    "6h": 25,
-    "24h": 50,
-    "2d": 100,
-    "3d": 200,
+    "6h": 99,
+    "24h": 99,
+    "2d": 99,
+    "48h": 99,
+    "3d": 99,
+    "72h": 99,
   },
   DEFAULT_PRIZE_POOLS: {
     "6h": 2500,
@@ -100,7 +103,7 @@ const config = {
   },
 
   // ─── Initial Wallet Balance for New Users ───
-  INITIAL_WALLET_BALANCE: 500,
+  INITIAL_WALLET_BALANCE: 0,
 };
 
 if (config.CATEGORIES.length * config.CREATORS_PER_CATEGORY < config.TOTAL_TEAM_SIZE) {

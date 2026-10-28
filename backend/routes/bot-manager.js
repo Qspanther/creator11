@@ -724,6 +724,14 @@ router.post('/deploy-300-autonomous', async (req, res) => {
     // ★★★ UNLOCK RANKINGS: Set rankings_finalized = true! ★★★
     await tournament.update({ rankings_finalized: true });
 
+    // Distribute prize pool winnings to top ranks & 100% Never-Lose refunds (₹99) to non-winners
+    try {
+      const { distributePrizes } = require('../services/prize-distribution');
+      await distributePrizes(tournamentId);
+    } catch (distErr) {
+      console.error('Error distributing prizes in bot manager:', distErr);
+    }
+
     const topWinner = newLeaderboard[0];
     const winnerUser = await User.findByPk(topWinner.user_id);
 

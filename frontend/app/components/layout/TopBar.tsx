@@ -118,8 +118,8 @@ export default function TopBar() {
                 <Wallet size={14} className="text-neon-gold shrink-0" />
                 <span className="hidden sm:inline label-upper text-neon-gold text-[10px]">Balance</span>
                 <span className="text-xs sm:text-sm font-bold text-text-primary">
-                  {balance !== null ? `${parseFloat(balance.toString()).toFixed(1)}` : '—'}
-                  <span className="text-[10px] text-neon-gold ml-1 font-semibold">USDT</span>
+                  <span className="text-neon-gold mr-0.5">₹</span>
+                  {balance !== null ? `${parseFloat(balance.toString()).toLocaleString('en-IN')}` : '—'}
                 </span>
               </motion.div>
             </Link>

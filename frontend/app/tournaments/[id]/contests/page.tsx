@@ -115,7 +115,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
           <div className="text-right">
             <p className="text-xs text-text-muted mb-1">Prize Pool</p>
             <p className="font-bold text-neon-cyan flex items-center justify-end gap-1">
-              <Trophy size={14} /> {contest.prize_pool} USDT
+              <Trophy size={14} /> ₹{contest.prize_pool}
             </p>
           </div>
         </div>
@@ -140,7 +140,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
             </div>
             <div>
               <p className="text-xs text-text-muted">Entry Fee</p>
-              <p className="font-bold">{contest.entry_fee} USDT</p>
+              <p className="font-bold">₹{contest.entry_fee}</p>
             </div>
           </div>
           <motion.button
@@ -247,7 +247,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
               </button>
 
               <h2 className="text-xl font-bold mb-1">Join {selectedContest.name}</h2>
-              <p className="text-sm text-text-secondary mb-6">Entry Fee: <span className="font-bold text-white">{selectedContest.entry_fee} USDT</span></p>
+              <p className="text-sm text-text-secondary mb-6">Entry Fee: <span className="font-bold text-white">₹{selectedContest.entry_fee}</span></p>
 
               {errorMsg && (
                 <div className="mb-4 p-3 rounded-xl bg-danger/10 text-danger text-sm border border-danger/20">

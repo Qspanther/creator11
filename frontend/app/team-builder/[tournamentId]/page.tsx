@@ -295,12 +295,12 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
           <div className="flex items-center gap-6 bg-black/40 px-5 py-3 rounded-2xl border border-white/5">
             <div>
               <p className="text-[10px] text-text-muted font-bold tracking-wider uppercase">Entry Fee</p>
-              <p className="text-base font-extrabold text-neon-cyan">{tournament?.entry_fee} USDT</p>
+              <p className="text-base font-extrabold text-neon-cyan">₹{tournament?.entry_fee}</p>
             </div>
             <div className="w-px h-8 bg-white/10" />
             <div>
               <p className="text-[10px] text-text-muted font-bold tracking-wider uppercase">Prize Pool</p>
-              <p className="text-base font-extrabold text-neon-gold">{tournament?.prize_pool} USDT</p>
+              <p className="text-base font-extrabold text-neon-gold">₹{tournament?.prize_pool}</p>
             </div>
           </div>
         </div>

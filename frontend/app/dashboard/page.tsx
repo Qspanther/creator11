@@ -91,7 +91,7 @@ export default function DashboardPage() {
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
         {[
-          { label: 'Wallet Balance', value: `${balance.toLocaleString()} USDT`, icon: Wallet, color: 'text-neon-gold' },
+          { label: 'Wallet Balance', value: `₹${balance.toLocaleString('en-IN')}`, icon: Wallet, color: 'text-neon-gold' },
           { label: 'Your Active Teams', value: stats.totalTeams.toString(), icon: Users, color: 'text-neon-purple' },
           { label: 'League Competitors', value: '300+ Active', icon: TrendingUp, color: 'text-neon-cyan' },
         ].map((s, i) => (

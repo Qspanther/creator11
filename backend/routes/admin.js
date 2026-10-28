@@ -41,7 +41,7 @@ router.get('/stats', async (req, res) => {
     const totalPrizePool = prizeSum || 0;
 
     res.json({
-      currency: 'USDT',
+      currency: 'INR',
       totalUsers,
       totalCreators,
       totalTournaments,
@@ -333,13 +333,13 @@ router.post('/deposits/:id/approve', async (req, res) => {
     // Send notification to user
     await Notification.create({
       user_id: wallet.user_id,
-      title: 'USDT Deposit Confirmed! 🎉',
-      message: `${tx.amount} USDT has been verified and added to your balance. Happy Gaming!`,
+      title: 'INR Deposit Confirmed! 🎉',
+      message: `₹${tx.amount} has been verified and added to your balance. Happy Gaming!`,
       type: 'wallet_deposit_approved'
     }, { transaction: t });
 
     await t.commit();
-    res.json({ message: 'Deposit approved and USDT balance credited successfully!', balance: newBalance });
+    res.json({ message: 'Deposit approved and INR balance credited successfully!', balance: newBalance });
   } catch (error) {
     await t.rollback();
     console.error('Approve deposit error:', error);
@@ -367,8 +367,8 @@ router.post('/deposits/:id/reject', async (req, res) => {
     if (tx.Wallet && tx.Wallet.user_id) {
       await Notification.create({
         user_id: tx.Wallet.user_id,
-        title: 'USDT Deposit Rejected ⚠️',
-        message: `Your deposit proof for ${tx.amount} USDT was rejected. Reason: ${reason || 'Invalid TXID'}.`,
+        title: 'INR Deposit Rejected ⚠️',
+        message: `Your deposit proof for ₹${tx.amount} was rejected. Reason: ${reason || 'Invalid TXID'}.`,
         type: 'wallet_deposit_rejected'
       });
     }
@@ -414,8 +414,8 @@ router.post('/withdrawals/:id/approve', async (req, res) => {
     if (tx.Wallet && tx.Wallet.user_id) {
       await Notification.create({
         user_id: tx.Wallet.user_id,
-        title: 'USDT Withdrawal Sent! 💸',
-        message: `Your payout of ${Math.abs(tx.amount)} USDT has been successfully transferred to your external wallet.`,
+        title: 'INR Withdrawal Sent! 💸',
+        message: `Your payout of ₹${Math.abs(tx.amount)} has been successfully transferred to your external wallet.`,
         type: 'wallet_withdrawal_approved'
       });
     }
@@ -455,8 +455,8 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
     if (wallet && wallet.user_id) {
       await Notification.create({
         user_id: wallet.user_id,
-        title: 'USDT Withdrawal Cancelled & Refunded',
-        message: `Your withdrawal was cancelled and ${Math.abs(tx.amount)} USDT refunded. Reason: ${reason || 'Invalid address'}.`,
+        title: 'INR Withdrawal Cancelled & Refunded',
+        message: `Your withdrawal was cancelled and ₹${Math.abs(tx.amount)} refunded. Reason: ${reason || 'Invalid address'}.`,
         type: 'wallet_withdrawal_rejected'
       }, { transaction: t });
     }

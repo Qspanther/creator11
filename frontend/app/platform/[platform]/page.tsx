@@ -276,11 +276,11 @@ export default function PlatformLobbyPage({ params }: { params: Promise<{ platfo
                     <div className="space-y-1.5 text-xs pb-4 border-b border-white/5">
                       <div className="flex justify-between items-center text-text-muted">
                         <span>Entry:</span>
-                        <span className="font-extrabold text-white">{parseFloat(t.entry_fee).toFixed(0)} USDT</span>
+                        <span className="font-extrabold text-white">₹{parseFloat(t.entry_fee).toFixed(0)}</span>
                       </div>
                       <div className="flex justify-between items-center text-text-muted">
                         <span>Prize:</span>
-                        <span className="font-extrabold text-neon-gold">{parseFloat(t.prize_pool).toLocaleString()} USDT</span>
+                        <span className="font-extrabold text-neon-gold">₹{parseFloat(t.prize_pool).toLocaleString('en-IN')}</span>
                       </div>
                     </div>
 

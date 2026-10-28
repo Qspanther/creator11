@@ -81,7 +81,7 @@ export default function TournamentListPage() {
           <h1 className="text-3xl font-extrabold text-white">Fantasy Battle Leagues</h1>
         </div>
         <p className="text-sm text-text-secondary">
-          Compete in live delta-growth tournaments, inspect real-time scorecards, and win USDT prize pools!
+          Compete in live delta-growth tournaments, inspect real-time scorecards, and win ₹ (INR) cash prize pools!
         </p>
       </motion.div>
 
@@ -137,13 +137,13 @@ export default function TournamentListPage() {
                     <span className="text-text-secondary flex items-center gap-2">
                       <Coins size={14} className="text-neon-gold" /> Entry Fee
                     </span>
-                    <span className="font-extrabold text-white">{parseFloat(t.entry_fee).toFixed(0)} USDT</span>
+                    <span className="font-extrabold text-white">₹{parseFloat(t.entry_fee).toFixed(0)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-text-secondary flex items-center gap-2">
                       <Trophy size={14} className="text-neon-cyan" /> Prize Pool
                     </span>
-                    <span className="font-black text-neon-gold text-base">{parseFloat(t.prize_pool).toLocaleString()} USDT</span>
+                    <span className="font-black text-neon-gold text-base">₹{parseFloat(t.prize_pool).toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-text-secondary flex items-center gap-2">

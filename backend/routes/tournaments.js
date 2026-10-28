@@ -1,12 +1,12 @@
 const express = require('express');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, optionalAuthenticate } = require('../middleware/auth');
 const { Tournament } = require('../db/models');
 const { Op } = require('sequelize');
 
 const router = express.Router();
 
 // GET /tournaments — List all tournaments (optionally filter by platform)
-router.get('/', authenticate, async (req, res) => {
+router.get('/', optionalAuthenticate, async (req, res) => {
   try {
     const { platform, status } = req.query;
     const where = {};
@@ -27,7 +27,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // GET /tournaments/:id — Get tournament details
-router.get('/:id', authenticate, async (req, res) => {
+router.get('/:id', optionalAuthenticate, async (req, res) => {
   try {
     const tournament = await Tournament.findByPk(req.params.id);
     if (!tournament) {
@@ -41,7 +41,7 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // GET /tournaments/:id/contests — Get contests for a match
-router.get('/:id/contests', authenticate, async (req, res) => {
+router.get('/:id/contests', optionalAuthenticate, async (req, res) => {
   try {
     const { Contest } = require('../db/models');
     const contests = await Contest.findAll({

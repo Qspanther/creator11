@@ -28,6 +28,26 @@ async function authenticate(req, res, next) {
   }
 }
 
+// ─── Optional Authentication Middleware ───
+// Allows public access while attaching user if valid token exists
+async function optionalAuthenticate(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, config.JWT_SECRET);
+      const user = await User.findByPk(decoded.userId);
+      if (user) {
+        req.user = user;
+        req.userId = decoded.userId;
+      }
+    }
+  } catch (error) {
+    // Gracefully ignore token errors for public routes
+  }
+  next();
+}
+
 // ─── Admin Check Middleware ───
 // Must be used AFTER authenticate middleware
 async function isAdmin(req, res, next) {
@@ -43,4 +63,5 @@ async function isAdmin(req, res, next) {
   }
 }
 
-module.exports = { authenticate, isAdmin };
+module.exports = { authenticate, optionalAuthenticate, isAdmin };
+

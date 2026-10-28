@@ -5,99 +5,121 @@ const sequelize = require('../db/index');
 
 const router = express.Router();
 
-// Fallback default admin crypto addresses
-const DEFAULT_CRYPTO_ADDRESSES = {
-  TRC20: 'TYDzsYUEpvnYmQK4WKnMBukZxDHzU4mTRC',
-  BEP20: '0x8894E0a0c962CB723c1976a4421c95949bE2D4E3',
-  ERC20: '0x0d4a11d5EEaaC28EC3F61d100daF4d40471f1852'
+// Default INR payment receiving details
+const DEFAULT_INR_CONFIG = {
+  currency: 'INR',
+  currencySymbol: '₹',
+  minDeposit: 100,
+  maxDeposit: 100000,
+  minWithdrawal: 100,
+  upi: {
+    id: 'creator11.league@upi',
+    name: 'Creator Entertainment League',
+    qrPayload: 'upi://pay?pa=creator11.league@upi&pn=Creator%20Entertainment%20League&cu=INR'
+  },
+  bank: {
+    accountName: 'Creator Entertainment League Pvt Ltd',
+    accountNumber: '50200084729104',
+    ifsc: 'HDFC0000240',
+    bankName: 'HDFC Bank Ltd'
+  }
 };
 
-// GET /wallet/crypto-addresses (Public or Authenticated)
-router.get('/crypto-addresses', async (req, res) => {
+// GET /wallet/config — Public & Authenticated INR Gateway Configuration
+router.get('/config', async (req, res) => {
   try {
     const settings = await SystemSetting.findAll({
       where: {
-        key: ['crypto_trc20_address', 'crypto_bep20_address', 'crypto_erc20_address']
+        key: ['inr_upi_id', 'inr_upi_name', 'inr_bank_name', 'inr_account_number', 'inr_ifsc']
       }
     });
 
-    const addresses = { ...DEFAULT_CRYPTO_ADDRESSES };
+    const config = JSON.parse(JSON.stringify(DEFAULT_INR_CONFIG));
     settings.forEach(s => {
-      if (s.key === 'crypto_trc20_address' && s.value) addresses.TRC20 = s.value;
-      if (s.key === 'crypto_bep20_address' && s.value) addresses.BEP20 = s.value;
-      if (s.key === 'crypto_erc20_address' && s.value) addresses.ERC20 = s.value;
+      if (s.key === 'inr_upi_id' && s.value) {
+        config.upi.id = s.value;
+        config.upi.qrPayload = `upi://pay?pa=${encodeURIComponent(s.value)}&pn=Creator%20Entertainment%20League&cu=INR`;
+      }
+      if (s.key === 'inr_upi_name' && s.value) config.upi.name = s.value;
+      if (s.key === 'inr_bank_name' && s.value) config.bank.bankName = s.value;
+      if (s.key === 'inr_account_number' && s.value) config.bank.accountNumber = s.value;
+      if (s.key === 'inr_ifsc' && s.value) config.bank.ifsc = s.value;
     });
 
-    res.json({
-      currency: 'USDT',
-      networks: {
-        TRC20: { name: 'Tron (TRC20)', address: addresses.TRC20, symbol: 'USDT-TRC20', confirmations: 1 },
-        BEP20: { name: 'BNB Smart Chain (BEP20)', address: addresses.BEP20, symbol: 'USDT-BEP20', confirmations: 15 },
-        ERC20: { name: 'Ethereum (ERC20)', address: addresses.ERC20, symbol: 'USDT-ERC20', confirmations: 12 }
-      }
-    });
+    res.json(config);
   } catch (error) {
-    console.error('Crypto addresses error:', error);
-    res.status(500).json({ error: 'Failed to retrieve crypto addresses' });
+    console.error('Wallet config error:', error);
+    res.status(500).json({ error: 'Failed to retrieve INR wallet config' });
   }
 });
 
-// GET /wallet/balance
+// GET /wallet/crypto-addresses — Legacy route compatibility
+router.get('/crypto-addresses', async (req, res) => {
+  res.json({
+    currency: 'INR',
+    currencySymbol: '₹',
+    ...DEFAULT_INR_CONFIG
+  });
+});
+
+// GET /wallet/balance — Get user's INR balance
 router.get('/balance', authenticate, async (req, res) => {
   try {
     const wallet = await Wallet.findOne({ where: { user_id: req.userId } });
     if (!wallet) {
       return res.status(404).json({ error: 'Wallet not found' });
     }
-    res.json({ balance: parseFloat(wallet.balance), currency: 'USDT' });
+    res.json({
+      balance: parseFloat(wallet.balance),
+      currency: 'INR',
+      currencySymbol: '₹'
+    });
   } catch (error) {
     console.error('Get balance error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// POST /wallet/deposit-request (Submit USDT Deposit Proof with TXID)
+// POST /wallet/deposit-request — Submit INR Deposit Proof (UPI / UTR Ref)
 router.post('/deposit-request', authenticate, async (req, res) => {
   try {
-    const { amount, network, txid } = req.body;
+    const { amount, method = 'UPI', txid, utr, sender_upi } = req.body;
     const numAmount = parseFloat(amount);
+    const referenceNumber = (utr || txid || '').trim();
 
-    if (!numAmount || numAmount <= 0) {
-      return res.status(400).json({ error: 'Valid USDT amount is required' });
+    if (!numAmount || numAmount < 10) {
+      return res.status(400).json({ error: 'Minimum deposit amount is ₹10' });
     }
 
-    if (!['TRC20', 'BEP20', 'ERC20'].includes(network)) {
-      return res.status(400).json({ error: 'Valid network (TRC20, BEP20, or ERC20) is required' });
+    if (!referenceNumber || referenceNumber.length < 6) {
+      return res.status(400).json({ error: 'Valid 12-digit UPI Reference Number / UTR is required' });
     }
 
-    if (!txid || txid.trim().length < 8) {
-      return res.status(400).json({ error: 'Valid Transaction Hash (TXID) proof is required' });
-    }
-
-    // Check if TXID already exists
-    const cleanTxid = txid.trim();
-    const existing = await Transaction.findOne({ where: { txid: cleanTxid } });
+    // Check if UTR already submitted
+    const existing = await Transaction.findOne({ where: { txid: referenceNumber } });
     if (existing) {
-      return res.status(400).json({ error: 'This Transaction Hash (TXID) has already been submitted' });
+      return res.status(400).json({ error: 'This UTR / Reference Number has already been submitted' });
     }
 
     const wallet = await Wallet.findOne({ where: { user_id: req.userId } });
     if (!wallet) return res.status(404).json({ error: 'Wallet not found' });
 
+    const payMethod = method.toUpperCase();
     const tx = await Transaction.create({
       wallet_id: wallet.id,
       type: 'deposit',
       amount: numAmount,
-      network,
-      txid: cleanTxid,
+      network: payMethod,
+      txid: referenceNumber,
+      wallet_address: sender_upi || '',
       status: 'pending',
-      description: `USDT (${network}) Deposit - TXID: ${cleanTxid.slice(0, 10)}...`,
+      description: `INR (₹${numAmount.toLocaleString('en-IN')}) Deposit via ${payMethod} - UTR: ${referenceNumber.slice(-8)}`,
     });
 
     await Notification.create({
       user_id: req.userId,
-      title: 'USDT Deposit Submitted',
-      message: `Your deposit of ${numAmount} USDT via ${network} is pending verification.`,
+      title: '₹ Deposit Proof Submitted',
+      message: `Your deposit proof of ₹${numAmount.toLocaleString('en-IN')} via ${payMethod} (UTR: ${referenceNumber}) has been submitted. It will be verified shortly.`,
       type: 'wallet_deposit',
     });
 
@@ -111,10 +133,10 @@ router.post('/deposit-request', authenticate, async (req, res) => {
   }
 });
 
-// POST /wallet/add-funds (Instant dev/testing mock deposit)
+// POST /wallet/add-funds — Instant dev/testing mock INR deposit
 router.post('/add-funds', authenticate, async (req, res) => {
   try {
-    const { amount, network } = req.body;
+    const { amount, method = 'UPI' } = req.body;
     const numAmount = parseFloat(amount);
     if (!numAmount || numAmount <= 0) {
       return res.status(400).json({ error: 'Amount must be positive' });
@@ -128,20 +150,28 @@ router.post('/add-funds', authenticate, async (req, res) => {
 
       await wallet.update({ balance: newBalance }, { transaction: t });
 
-      await Transaction.create({
+      const tx = await Transaction.create({
         wallet_id: wallet.id,
         type: 'deposit',
         amount: numAmount,
-        network: network || 'BEP20',
+        network: method.toUpperCase(),
         status: 'completed',
-        description: `Direct USDT (${network || 'BEP20'}) Test Credit`,
+        description: `Direct INR (₹${numAmount.toLocaleString('en-IN')}) Quick Credit`,
+      }, { transaction: t });
+
+      await Notification.create({
+        user_id: req.userId,
+        title: '₹ Wallet Credited',
+        message: `₹${numAmount.toLocaleString('en-IN')} has been added to your INR wallet.`,
+        type: 'wallet_deposit',
       }, { transaction: t });
 
       await t.commit();
 
       res.json({
-        message: 'Funds added successfully',
+        message: `₹${numAmount.toLocaleString('en-IN')} added successfully`,
         balance: newBalance,
+        transaction: tx,
       });
     } catch (error) {
       await t.rollback();
@@ -153,28 +183,35 @@ router.post('/add-funds', authenticate, async (req, res) => {
   }
 });
 
-// POST /wallet/withdraw (Submit USDT Withdrawal Request)
+// POST /wallet/withdraw — Submit INR Payout Request (UPI / Bank Account)
 router.post('/withdraw', authenticate, async (req, res) => {
   try {
-    const { amount, network, wallet_address } = req.body;
+    const { amount, method = 'UPI', upi_id, account_number, ifsc, account_name, bank_name } = req.body;
     const numAmount = parseFloat(amount);
 
-    if (!numAmount || numAmount <= 0) {
-      return res.status(400).json({ error: 'Amount must be positive' });
+    if (!numAmount || numAmount < 100) {
+      return res.status(400).json({ error: 'Minimum withdrawal amount is ₹100' });
     }
 
-    if (!network || !['TRC20', 'BEP20', 'ERC20'].includes(network)) {
-      return res.status(400).json({ error: 'Select a valid withdrawal network (TRC20, BEP20, ERC20)' });
-    }
+    const payMethod = method.toUpperCase();
 
-    if (!wallet_address || wallet_address.trim().length < 15) {
-      return res.status(400).json({ error: 'Valid destination USDT wallet address is required' });
+    if (payMethod === 'UPI') {
+      if (!upi_id || !upi_id.includes('@')) {
+        return res.status(400).json({ error: 'Valid UPI ID (e.g. name@okhdfcbank or 9876543210@paytm) is required' });
+      }
+    } else {
+      if (!account_number || account_number.trim().length < 8) {
+        return res.status(400).json({ error: 'Valid Bank Account Number is required' });
+      }
+      if (!ifsc || ifsc.trim().length < 8) {
+        return res.status(400).json({ error: 'Valid Bank IFSC code is required' });
+      }
     }
 
     // Check KYC status
     const user = await User.findByPk(req.userId);
     if (user.kyc_status !== 'verified') {
-      return res.status(403).json({ error: 'KYC verification required before withdrawal', kycStatus: user.kyc_status });
+      return res.status(403).json({ error: 'KYC PAN verification required before INR withdrawal', kycStatus: user.kyc_status });
     }
 
     const t = await sequelize.transaction();
@@ -184,26 +221,27 @@ router.post('/withdraw', authenticate, async (req, res) => {
 
       if (currentBalance < numAmount) {
         await t.rollback();
-        return res.status(400).json({ error: 'Insufficient USDT balance' });
+        return res.status(400).json({ error: `Insufficient INR balance. Available: ₹${currentBalance.toLocaleString('en-IN')}` });
       }
 
       const newBalance = currentBalance - numAmount;
       await wallet.update({ balance: newBalance }, { transaction: t });
 
+      const destination = payMethod === 'UPI' ? upi_id.trim() : `A/C ${account_number.slice(-4)} (${ifsc})`;
       const tx = await Transaction.create({
         wallet_id: wallet.id,
         type: 'withdraw',
         amount: -numAmount,
-        network,
-        wallet_address: wallet_address.trim(),
+        network: payMethod,
+        wallet_address: destination,
         status: 'pending',
-        description: `USDT (${network}) Withdrawal to ${wallet_address.trim().slice(0, 10)}...`,
+        description: `INR (₹${numAmount.toLocaleString('en-IN')}) Payout via ${payMethod} to ${destination}`,
       }, { transaction: t });
 
       await Notification.create({
         user_id: req.userId,
-        title: 'Withdrawal Request Submitted',
-        message: `Your withdrawal of ${numAmount} USDT (${network}) is pending review.`,
+        title: '₹ Withdrawal Request Submitted',
+        message: `Your payout request of ₹${numAmount.toLocaleString('en-IN')} via ${payMethod} to ${destination} is being processed.`,
         type: 'wallet_withdrawal',
       }, { transaction: t });
 
@@ -224,27 +262,32 @@ router.post('/withdraw', authenticate, async (req, res) => {
   }
 });
 
-// POST /wallet/kyc — Submit KYC documents
+// POST /wallet/kyc — Submit KYC PAN verification
 router.post('/kyc', authenticate, async (req, res) => {
   try {
     const { fullName, panNumber } = req.body;
     if (!fullName || !panNumber) {
-      return res.status(400).json({ error: 'Full name and PAN / ID number are required' });
+      return res.status(400).json({ error: 'Full name and PAN number are required' });
+    }
+
+    const cleanPan = panNumber.trim().toUpperCase();
+    if (cleanPan.length !== 10) {
+      return res.status(400).json({ error: 'PAN number must be exactly 10 characters (e.g. ABCDE1234F)' });
     }
 
     await User.update(
-      { kyc_status: 'verified', kyc_name: fullName, kyc_pan: panNumber },
+      { kyc_status: 'verified', kyc_name: fullName.trim(), kyc_pan: cleanPan },
       { where: { id: req.userId } }
     );
 
-    res.json({ message: 'KYC verified successfully', kycStatus: 'verified' });
+    res.json({ message: 'KYC verified successfully! You can now withdraw funds.', kycStatus: 'verified' });
   } catch (error) {
     console.error('KYC error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /wallet/transactions
+// GET /wallet/transactions — User's transaction history
 router.get('/transactions', authenticate, async (req, res) => {
   try {
     const wallet = await Wallet.findOne({ where: { user_id: req.userId } });

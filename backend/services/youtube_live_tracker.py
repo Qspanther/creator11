@@ -92,8 +92,28 @@ def calculate_exact_subscribers(creator_id, handle, official_subs, current_views
 
     return exact_subs
 
+def is_long_video(v):
+    """Filter out YouTube Shorts: ensures video is strictly a full-length regular video."""
+    if not v:
+        return False
+    if getattr(v, 'is_short', False):
+        return False
+    url = getattr(v, 'url', '')
+    if '/shorts/' in url:
+        return False
+    title = getattr(v, 'title', '')
+    if '#shorts' in title.lower():
+        return False
+    duration_sec = getattr(v, 'duration_seconds', None)
+    if duration_sec is not None and duration_sec <= 60:
+        return False
+    return True
+
 def fetch_creator_latest_video(handle):
-    """Fetch the latest video and channel subscriber count using tubescrape."""
+    """
+    Fetch the latest strictly LONG video (ignoring Shorts)
+    and channel subscriber count using tubescrape.
+    """
     if not handle:
         return None, None, 0
 
@@ -115,12 +135,14 @@ def fetch_creator_latest_video(handle):
             except Exception as e:
                 pass
 
-            # 2. Get latest video
-            result = yt.get_channel_videos(handle, max_results=1)
+            # 2. Get latest LONG video (scan top results to bypass any Shorts)
+            result = yt.get_channel_videos(handle, max_results=10)
             if result and result.videos:
-                v = result.videos[0]
-                video_url = v.url
-                video_title = v.title
+                for v in result.videos:
+                    if is_long_video(v):
+                        video_url = v.url
+                        video_title = v.title
+                        break
     except Exception as e:
         print(f"[YT-SYNC] ⚠️ Channel fetch warning for {handle}: {e}")
 

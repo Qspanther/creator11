@@ -140,20 +140,29 @@ export default function ScorecardModal({ teamId, onClose }: ScorecardModalProps)
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-xl font-extrabold text-white">{data?.userName || 'Team Scorecard'}</h2>
                   {data && (
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${
-                      data.rank === 1
-                        ? 'bg-neon-gold/20 text-neon-gold border border-neon-gold/40'
-                        : data.rank <= 3
-                          ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40'
-                          : 'bg-white/10 text-text-secondary'
-                    }`}>
-                      {data.rank === 1 ? '👑 Rank #1 Winner' : `Rank #${data.rank}`}
-                    </span>
-                  )}
-                  {data && data.prizeWon > 0 && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-neon-gold text-black shadow-md shadow-neon-gold/20">
-                      🏆 +{data.prizeWon.toLocaleString()} USDT Won
-                    </span>
+                    data.tournament.status === 'completed' && (data.tournament as any).rankingsFinalized !== false ? (
+                      <>
+                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${
+                          data.rank === 1
+                            ? 'bg-neon-gold/20 text-neon-gold border border-neon-gold/40'
+                            : data.rank <= 3
+                              ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40'
+                              : 'bg-white/10 text-text-secondary'
+                        }`}>
+                          {data.rank === 1 ? '👑 Rank #1 Winner' : `Rank #${data.rank}`}
+                        </span>
+                        {data.prizeWon > 0 && (
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-neon-gold text-black shadow-md shadow-neon-gold/20">
+                            🏆 +{data.prizeWon.toLocaleString()} USDT Won
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-success/20 text-success border border-success/40 flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                        LIVE SCORECARD • RANKS HIDDEN UNTIL END
+                      </span>
+                    )
                   )}
                 </div>
                 <p className="text-xs text-text-secondary mt-0.5">

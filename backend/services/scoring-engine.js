@@ -351,6 +351,7 @@ async function getTeamScorecard(teamId) {
     teamId: team.id,
     userId: team.user_id,
     userName: team.User ? team.User.name : (team.user ? team.user.name : 'Unknown User'),
+    userEmail: team.User ? team.User.email : (team.user ? team.user.email : ''),
     tournament: {
       id: team.Tournament.id,
       name: team.Tournament.name,
@@ -360,6 +361,7 @@ async function getTeamScorecard(teamId) {
       endTime: team.Tournament.end_time,
       lockTime: team.Tournament.lock_time,
       prizePool: parseFloat(team.Tournament.prize_pool),
+      rankingsFinalized: team.Tournament.rankings_finalized !== false && team.Tournament.rankings_finalized !== 0,
     },
     totalCreditsUsed: parseFloat(team.total_credits_used),
     totalTeamPoints: parseFloat(totalTeamPoints.toFixed(4)),

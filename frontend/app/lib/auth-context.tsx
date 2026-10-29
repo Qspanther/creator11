@@ -28,7 +28,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
 });
 
-const API_BASE = '/api-backend';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api-backend';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);

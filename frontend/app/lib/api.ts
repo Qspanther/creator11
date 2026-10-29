@@ -1,4 +1,4 @@
-﻿const API_BASE = '/api-backend';
+﻿const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api-backend';
 
 type FetchOptions = {
   method?: string;

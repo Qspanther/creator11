@@ -20,6 +20,7 @@ interface Tournament {
   status: string;
   current_participants: number;
   max_participants: number;
+  rankings_finalized?: boolean | number;
 }
 
 function CountdownTimer({ targetDate }: { targetDate: string }) {

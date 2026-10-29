@@ -16,11 +16,6 @@ services:
         generateValue: true
       - key: BOT_API_KEY
         value: c11_bot_mgr_sec_9938a7fbc21d49e
-      - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: creator11-frontend
-          property: host
 
   # ─── FRONTEND NEXT.JS WEB APP ───
   - type: web

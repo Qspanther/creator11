@@ -240,7 +240,7 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
                 <p className="text-xl font-black text-neon-gold">{userPoints.toFixed(4)} pts</p>
                 {userPrize && userPrize > 0 ? (
                   <span className="inline-block mt-0.5 text-xs font-bold text-success">
-                    🏆 +{userPrize.toLocaleString()} USDT Won
+                    🏆 +₹{userPrize.toLocaleString('en-IN')} Won
                   </span>
                 ) : null}
               </>

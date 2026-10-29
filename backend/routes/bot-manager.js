@@ -30,10 +30,10 @@ function requireBotApiKey(req, res, next) {
     });
   }
 
-  const expectedKey = Buffer.from(config.BOT_API_KEY);
-  const providedKey = Buffer.from(apiKey);
+  const expectedHash = crypto.createHash('sha256').update(String(config.BOT_API_KEY || '')).digest();
+  const providedHash = crypto.createHash('sha256').update(String(apiKey || '')).digest();
 
-  if (expectedKey.length !== providedKey.length || !crypto.timingSafeEqual(expectedKey, providedKey)) {
+  if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
     return res.status(401).json({
       success: false,
       error: 'Unauthorized: Invalid x-bot-api-key'

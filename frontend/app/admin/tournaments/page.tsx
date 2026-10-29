@@ -157,11 +157,11 @@ export default function AdminTournamentsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">Entry Fee (USDT)</label>
+                  <label className="block text-xs text-text-muted mb-1">Entry Fee (₹ INR)</label>
                   <input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple" value={addForm.entry_fee} onChange={e => setAddForm({...addForm, entry_fee: e.target.value})} />
                 </div>
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">Prize Pool (USDT)</label>
+                  <label className="block text-xs text-text-muted mb-1">Prize Pool (₹ INR)</label>
                   <input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple" value={addForm.prize_pool} onChange={e => setAddForm({...addForm, prize_pool: e.target.value})} />
                 </div>
               </div>
@@ -217,13 +217,13 @@ export default function AdminTournamentsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">Entry Fee (USDT)</label>
+                  <label className="block text-xs text-text-muted mb-1">Entry Fee (₹ INR)</label>
                   <input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple" value={contestForm.entry_fee} onChange={e => setContestForm({...contestForm, entry_fee: Number(e.target.value)})} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">Prize Pool (USDT)</label>
+                  <label className="block text-xs text-text-muted mb-1">Prize Pool (₹ INR)</label>
                   <input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple" value={contestForm.prize_pool} onChange={e => setContestForm({...contestForm, prize_pool: Number(e.target.value)})} />
                 </div>
                 <div>

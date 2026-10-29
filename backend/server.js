@@ -7,6 +7,7 @@ const sequelize = require('./db/index');
 require('./db/models'); // Load all models and associations
 const { seed } = require('./db/seed');
 const { startScheduler } = require('./services/scheduler');
+const { authenticate, isAdmin } = require('./middleware/auth');
 
 const app = express();
 
@@ -83,7 +84,7 @@ app.get('/health', (req, res) => {
 });
 
 // Manual scoring trigger (for testing)
-app.post('/admin/trigger-scoring/:tournamentId', async (req, res) => {
+app.post('/admin/trigger-scoring/:tournamentId', authenticate, isAdmin, async (req, res) => {
   try {
     const { takeSnapshot, calculateScores } = require('./services/scoring-engine');
     const { Tournament } = require('./db/models');
@@ -103,7 +104,7 @@ app.post('/admin/trigger-scoring/:tournamentId', async (req, res) => {
 });
 
 // Manual prize distribution trigger (for testing)
-app.post('/admin/distribute-prizes/:tournamentId', async (req, res) => {
+app.post('/admin/distribute-prizes/:tournamentId', authenticate, isAdmin, async (req, res) => {
   try {
     const { distributePrizes } = require('./services/prize-distribution');
     await distributePrizes(req.params.tournamentId);

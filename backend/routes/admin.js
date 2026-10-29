@@ -35,7 +35,7 @@ const upload = multer({
 router.use(authenticate);
 router.use(isAdmin);
 
-// ─── 0. Dashboard Stats (in USDT) ───
+// ─── 0. Dashboard Stats (in INR) ───
 router.get('/stats', async (req, res) => {
   try {
     const totalUsers = await User.count();
@@ -318,7 +318,7 @@ router.get('/deposits/pending', async (req, res) => {
   }
 });
 
-// POST /admin/deposits/:id/approve — 1-Click Approve & Credit USDT Balance
+// POST /admin/deposits/:id/approve — 1-Click Approve & Credit INR Balance
 router.post('/deposits/:id/approve', async (req, res) => {
   const t = await sequelize.transaction();
   try {

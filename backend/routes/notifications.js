@@ -7,7 +7,7 @@ const router = express.Router();
 // Fetch notifications for the user
 router.get('/', authenticate, async (req, res) => {
   try {
-    const userId = req.user ? req.user.userId : null;
+    const actualUserId = req.userId;
     
     // We only have global notifications right now, so we fetch where user_id is null or user_id matches.
     // In our implementation, we've set `authenticate` middleware, which sets `req.user.userId`.

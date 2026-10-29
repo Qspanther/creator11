@@ -1,6 +1,7 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
-const { Contest, ContestParticipant, Team, Wallet, Transaction, sequelize } = require('../db/models');
+const { Contest, ContestParticipant, Team, Wallet, Transaction } = require('../db/models');
+const sequelize = require('../db/index');
 
 const router = express.Router();
 
@@ -10,7 +11,7 @@ router.post('/:id/join', authenticate, async (req, res) => {
   try {
     const contestId = req.params.id;
     const { teamId } = req.body;
-    const userId = req.user ? req.user.userId : null;
+    const userId = req.userId || (req.user ? req.user.id : null);
 
     if (!userId) throw new Error("Unauthorized");
     if (!teamId) throw new Error("Team ID is required");

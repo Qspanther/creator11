@@ -168,8 +168,10 @@ router.post('/signup', async (req, res) => {
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanOtp = String(otp || '').trim();
 
-    if (!email || !otp) {
+    if (!cleanEmail || !cleanOtp) {
       return res.status(400).json({ error: 'Email and OTP are required' });
     }
 
@@ -217,8 +219,10 @@ router.post('/verify-otp', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPassword = String(password || '');
 
-    if (!email || !password) {
+    if (!cleanEmail || !cleanPassword) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
@@ -308,7 +312,8 @@ router.get('/me', async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail) return res.status(400).json({ error: 'Email is required' });
 
     const user = await User.findOne({ where: { email: cleanEmail } });
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -329,7 +334,10 @@ router.post('/forgot-password', async (req, res) => {
 router.post('/reset-password', async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
-    if (!email || !otp || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanOtp = String(otp || '').trim();
+    const cleanNewPassword = String(newPassword || '');
+    if (!cleanEmail || !cleanOtp || !cleanNewPassword) return res.status(400).json({ error: 'Missing fields' });
 
     const user = await User.findOne({ where: { email: cleanEmail } });
     if (!user) return res.status(404).json({ error: 'User not found' });

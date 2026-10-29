@@ -301,6 +301,36 @@ services:
 
 ---
 
+---
+
+## 🤖 ECC Universal & Agentic Workflow
+This repository is configured with **ECC Universal (v2.2.0)** for Antigravity-native agentic development and automated quality gates:
+
+- **ECC Target:** Antigravity Project (`.agents/`)
+- **ECC Doctor Status:** Clean (`checked=1, ok=1, warnings=0, errors=0`)
+- **Health Verification Command:**
+  ```bash
+  node scripts/doctor.js --target antigravity
+  ```
+
+### 📋 Feature & Modules Audit (Completed vs Roadmap)
+
+| Module / Area | Status | Details & Implementation |
+|---|---|---|
+| **YouTube Tournaments (6h, 24h, 48h, 72h)** | ✅ **Complete** | Full battle leagues, countdowns, start/lock/end timestamps, live participant counters. |
+| **₹99 Contest Entry & Wallet Gate** | ✅ **Complete** | Balance validation, automatic redirect to wallet if < ₹99, atomic debit with transaction log. |
+| **Team Builder (11 Creators)** | ✅ **Complete** | 3+2+2+2+2 category distribution, 125 credit cap, 2.0x Captain, 1.5x Vice-Captain. |
+| **"Never Loose" Guarantee Engine** | ✅ **Complete** | Top rankers receive prize pools; all unranked receive 100% money-back ₹99 refund. |
+| **Subscription & 4-Round Referral** | ✅ **Complete** | Monthly pass purchase + 4 dynamic referral rounds with automatic free pass unlocks. |
+| **Admin Control Suite** | ✅ **Complete** | User privacy masking, wallet manual credit/adjust, tournament & creator manager, UPI/Bank settings. |
+| **Security & Attack Hardening** | ✅ **Complete** | Helmet headers, IP rate-limiting, timing-safe SHA-256 bot keys, protected admin triggers. |
+| **Cloud Deployment (Render)** | ✅ **Complete** | Node 20.18.0 pinned, auto-routing to public backend, native SQLite compiled from source. |
+| **Automated Payment Gateway** | ⏳ *Roadmap* | Razorpay / Cashfree UPI QR Webhooks for automatic deposit crediting. |
+| **Live YouTube API Delta Scraping** | ⏳ *Roadmap* | Connect YouTube Data API v3 key to live channel IDs in `services/scoring-engine.js`. |
+| **Instagram Fantasy League** | 🛑 *Frozen* | Preserved completely; awaiting project owner explicit unfreeze instruction. |
+
+---
+
 ## 🛠️ How to Run the Project Locally
 
 ### Prerequisites

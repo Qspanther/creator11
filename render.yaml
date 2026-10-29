@@ -33,4 +33,6 @@ services:
       - key: NODE_ENV
         value: production
       - key: BACKEND_URL
-        sync: false
+        value: https://creator11-backend.onrender.com
+      - key: NEXT_PUBLIC_API_URL
+        value: https://creator11-backend.onrender.com

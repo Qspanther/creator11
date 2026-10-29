@@ -1,13 +1,15 @@
 import type { NextConfig } from "next";
 
-let rawBackendUrl = (process.env.BACKEND_URL || 'http://localhost:5000').trim();
+let rawBackendUrl = (process.env.BACKEND_URL || '').trim();
 
-// Ensure destination URL starts with http:// or https:// for Next.js rewrites
-if (!rawBackendUrl.startsWith('http://') && !rawBackendUrl.startsWith('https://')) {
+// On Render or production, if BACKEND_URL is missing or private hostname, use public Render URL
+if (!rawBackendUrl || rawBackendUrl === 'creator11-backend' || rawBackendUrl === 'creator11-backend:10000') {
+  rawBackendUrl = process.env.NODE_ENV === 'production'
+    ? 'https://creator11-backend.onrender.com'
+    : 'http://localhost:5000';
+} else if (!rawBackendUrl.startsWith('http://') && !rawBackendUrl.startsWith('https://')) {
   if (rawBackendUrl.includes('.onrender.com')) {
     rawBackendUrl = `https://${rawBackendUrl}`;
-  } else if (!rawBackendUrl.includes(':')) {
-    rawBackendUrl = `http://${rawBackendUrl}:10000`;
   } else {
     rawBackendUrl = `http://${rawBackendUrl}`;
   }

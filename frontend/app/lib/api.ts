@@ -1,4 +1,10 @@
-﻿const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api-backend';
+export function getApiBase() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+    return 'https://creator11-backend.onrender.com';
+  }
+  return '/api-backend';
+}
 
 type FetchOptions = {
   method?: string;
@@ -17,20 +23,27 @@ export async function api(endpoint: string, options: FetchOptions = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
+  const base = getApiBase();
+  const res = await fetch(`${base}${endpoint}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
-    cache: 'no-store', // Disable caching to ensure fresh data (like config)
+    cache: 'no-store', // Disable caching to ensure fresh data
   });
 
-  const data = await res.json();
+  const text = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(text || `Request failed with status ${res.status}`);
+  }
 
   if (!res.ok) {
-    if (data.requiresOtp) {
+    if (data && data.requiresOtp) {
       return data;
     }
-    throw new Error(data.error || 'Request failed');
+    throw new Error(data?.error || `Request failed with status ${res.status}`);
   }
 
   return data;
@@ -45,4 +58,3 @@ export const apiPost = (endpoint: string, body: unknown, token?: string | null) 
 
 export const apiPut = (endpoint: string, body: unknown, token?: string | null) =>
   api(endpoint, { method: 'PUT', body, token });
-

@@ -28,7 +28,13 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
 });
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api-backend';
+function getApiBase() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
+    return 'https://creator11-backend.onrender.com';
+  }
+  return '/api-backend';
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -41,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (stored) {
       setToken(stored);
       // Verify token
-      fetch(`${API_BASE}/auth/me`, {
+      fetch(`${getApiBase()}/auth/me`, {
         headers: { Authorization: `Bearer ${stored}` },
       })
         .then(res => res.json())

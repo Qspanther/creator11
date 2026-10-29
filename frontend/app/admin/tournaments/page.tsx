@@ -88,15 +88,7 @@ export default function AdminTournamentsPage() {
 
   const handleAddLeague = async () => {
     try {
-      const res = await fetch('/api-backend/admin/tournaments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(addForm)
-      });
-      if (!res.ok) throw new Error('Failed to create league');
+      await apiPost('/admin/tournaments', addForm, token);
       setShowAddModal(false);
       fetchTournaments();
     } catch (err) {

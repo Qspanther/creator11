@@ -1,4 +1,6 @@
 const express = require('express');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const config = require('./config');
 const sequelize = require('./db/index');
@@ -8,19 +10,56 @@ const { startScheduler } = require('./services/scheduler');
 
 const app = express();
 
+
+// ─── Security Headers (Helmet) ───
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false, // Managed by client frontend
+}));
+
+// ─── Rate Limiting (DDoS & Brute-Force Protection) ───
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 600, // 600 requests per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again after 15 minutes.' },
+});
+app.use('/api/', globalLimiter);
+app.use('/tournaments', globalLimiter);
+app.use('/creators', globalLimiter);
+app.use('/teams', globalLimiter);
+app.use('/wallet', globalLimiter);
+app.use('/leaderboard', globalLimiter);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30, // Max 30 attempts per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again in 15 minutes.' },
+});
+app.use('/auth/login', authLimiter);
+app.use('/auth/signup', authLimiter);
+app.use('/auth/verify-otp', authLimiter);
+app.use('/auth/forgot-password', authLimiter);
+app.use('/auth/reset-password', authLimiter);
+
 // Middleware
 app.use(cors({
   origin: true,
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 const path = require('path');
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Request logging
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path}`);
+  // Safe request logging: method and path only
+  console.log(`[${new Date().toISOString().slice(11, 19)}] ${req.method} ${req.path}`);
   next();
 });
 
@@ -78,7 +117,14 @@ app.post('/admin/distribute-prizes/:tournamentId', async (req, res) => {
 // Error handling
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+  if (res.headersSent) {
+    return next(err);
+  }
+  const status = err.status || 500;
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.status(status).json({
+    error: isProduction ? 'Internal server error' : (err.message || 'Internal server error')
+  });
 });
 
 // Start server

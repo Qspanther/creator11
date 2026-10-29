@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth-context';
-import { apiGet, apiPut } from '../../lib/api';
+import { apiGet, apiPut, getApiBase } from '../../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Edit2, Check, X, Video, Camera, Link as LinkIcon, Search, Image as ImageIcon } from 'lucide-react';
 
@@ -83,7 +83,7 @@ export default function AdminCreatorsPage() {
       if (token) {
         authHeaders['Authorization'] = `Bearer ${token}`;
       }
-      const res = await fetch('/api-backend/admin/upload', {
+      const res = await fetch(`${getApiBase()}/admin/upload`, {
         method: 'POST',
         headers: authHeaders,
         body: formData

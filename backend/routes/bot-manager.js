@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const config = require('../config');
@@ -19,13 +20,23 @@ const { Op } = require('sequelize');
 
 const router = express.Router();
 
-// ─── API Key Middleware ───
+// ─── Timing-Safe API Key Middleware ───
 function requireBotApiKey(req, res, next) {
-  const apiKey = req.headers['x-bot-api-key'] || req.query.apiKey;
-  if (!apiKey || apiKey !== config.BOT_API_KEY) {
+  const apiKey = req.headers['x-bot-api-key'];
+  if (!apiKey || typeof apiKey !== 'string') {
     return res.status(401).json({
       success: false,
-      error: 'Unauthorized: Invalid or missing x-bot-api-key header'
+      error: 'Unauthorized: Missing x-bot-api-key header'
+    });
+  }
+
+  const expectedKey = Buffer.from(config.BOT_API_KEY);
+  const providedKey = Buffer.from(apiKey);
+
+  if (expectedKey.length !== providedKey.length || !crypto.timingSafeEqual(expectedKey, providedKey)) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized: Invalid x-bot-api-key'
     });
   }
   next();

@@ -22,7 +22,7 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'name', 'email'],
+          attributes: ['id', 'name'],
         },
       ],
       limit: 300,
@@ -39,7 +39,7 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
             {
               model: User,
               as: 'user',
-              attributes: ['id', 'name', 'email'],
+              attributes: ['id', 'name'],
             },
           ],
           limit: 300,
@@ -72,7 +72,7 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
         teamId: e.team_id,
         userId: e.user_id,
         userName: e.user ? e.user.name : 'Unknown User',
-        userEmail: e.user ? e.user.email : '',
+        userEmail: e.user_id === req.userId ? (e.user ? e.user.email : '') : undefined,
         totalPoints: parseFloat(e.total_points),
         prizeAmount: parseFloat(e.prize_amount || 0),
         isCurrentUser: e.user_id === req.userId,

@@ -87,7 +87,7 @@ router.post('/deposit-request', authenticate, async (req, res) => {
     const numAmount = parseFloat(amount);
     const referenceNumber = (utr || txid || '').trim();
 
-    if (!numAmount || numAmount < 10) {
+    if (isNaN(numAmount) || !isFinite(numAmount) || numAmount < 10 || numAmount > 1000000) {
       return res.status(400).json({ error: 'Minimum deposit amount is ₹10' });
     }
 
@@ -141,7 +141,7 @@ router.post('/add-funds', authenticate, async (req, res) => {
     }
     const { amount, method = 'UPI' } = req.body;
     const numAmount = parseFloat(amount);
-    if (!numAmount || numAmount <= 0) {
+    if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0 || numAmount > 1000000) {
       return res.status(400).json({ error: 'Amount must be positive' });
     }
 
@@ -192,7 +192,7 @@ router.post('/withdraw', authenticate, async (req, res) => {
     const { amount, method = 'UPI', upi_id, account_number, ifsc, account_name, bank_name } = req.body;
     const numAmount = parseFloat(amount);
 
-    if (!numAmount || numAmount < 100) {
+    if (isNaN(numAmount) || !isFinite(numAmount) || numAmount < 100 || numAmount > 500000) {
       return res.status(400).json({ error: 'Minimum withdrawal amount is ₹100' });
     }
 

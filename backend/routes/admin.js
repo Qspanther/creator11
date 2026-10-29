@@ -18,7 +18,18 @@ const storage = multer.diskStorage({
     cb(null, uniqueSuffix + path.extname(file.originalname));
   }
 });
-const upload = multer({ storage: storage });
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPG, PNG, WEBP, and GIF images are allowed.'));
+    }
+  }
+});
 
 // All routes require authentication AND admin role
 router.use(authenticate);
@@ -61,7 +72,7 @@ router.get('/stats', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const users = await User.findAll({
-      attributes: { exclude: ['password_hash'] },
+      attributes: { exclude: ['password_hash', 'otp_code'] },
       include: [{ model: Wallet, as: 'wallet' }],
       order: [['createdAt', 'DESC']],
     });
@@ -75,7 +86,7 @@ router.get('/users', async (req, res) => {
 router.get('/users/:id', async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
-      attributes: { exclude: ['password_hash'] }
+      attributes: { exclude: ['password_hash', 'otp_code'] }
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
     

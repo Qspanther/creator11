@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { User, Wallet, SystemSetting, ReferralLog, Notification } = require('../db/models');
 
+const { authenticate } = require('../middleware/auth');
 const router = express.Router();
 
 // POST /auth/signup
@@ -11,12 +12,29 @@ router.post('/signup', async (req, res) => {
   try {
     const { name, email, password, phone, promoCode, referralCode } = req.body;
 
-    if (!name || !email || !password) {
+    const cleanName = String(name || '').trim().slice(0, 100);
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanPassword = String(password || '');
+
+    if (!cleanName || !cleanEmail || !cleanPassword) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+
+    if (cleanPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    if (cleanPassword.length > 128) {
+      return res.status(400).json({ error: 'Password cannot exceed 128 characters' });
+    }
+
     // Check if user exists
-    const existing = await User.findOne({ where: { email } });
+    const existing = await User.findOne({ where: { email: cleanEmail } });
     if (existing) {
       return res.status(409).json({ error: 'Email already registered' });
     }
@@ -34,7 +52,7 @@ router.post('/signup', async (req, res) => {
     }
 
     // Hash password
-    const password_hash = await bcrypt.hash(password, 10);
+    const password_hash = await bcrypt.hash(cleanPassword, 10);
 
     // Generate OTP (mock — displayed, not sent)
     const otp_code = String(Math.floor(100000 + Math.random() * 900000));
@@ -42,8 +60,8 @@ router.post('/signup', async (req, res) => {
 
     // Create user
     const user = await User.create({
-      name,
-      email,
+      name: cleanName,
+      email: cleanEmail,
       password_hash,
       phone: phone || null,
       otp_code,
@@ -155,7 +173,7 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'Email and OTP are required' });
     }
 
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({ where: { email: cleanEmail } });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -204,7 +222,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({ where: { email: cleanEmail } });
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -292,7 +310,7 @@ router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({ where: { email: cleanEmail } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const otp_code = String(Math.floor(100000 + Math.random() * 900000));
@@ -313,7 +331,7 @@ router.post('/reset-password', async (req, res) => {
     const { email, otp, newPassword } = req.body;
     if (!email || !otp || !newPassword) return res.status(400).json({ error: 'Missing fields' });
 
-    const user = await User.findOne({ where: { email } });
+    const user = await User.findOne({ where: { email: cleanEmail } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     if (user.otp_code !== otp || new Date() > new Date(user.otp_expires_at)) {
@@ -330,18 +348,13 @@ router.post('/reset-password', async (req, res) => {
 });
 
 // PUT /auth/change-password (Requires Auth)
-router.put('/change-password', async (req, res) => {
+router.put('/change-password', authenticate, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'No token' });
-    
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, config.JWT_SECRET);
-    
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+    if (String(newPassword).length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
 
-    const user = await User.findByPk(decoded.userId);
+    const user = await User.findByPk(req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
@@ -357,24 +370,20 @@ router.put('/change-password', async (req, res) => {
 });
 
 // PUT /auth/change-email (Requires Auth)
-router.put('/change-email', async (req, res) => {
+router.put('/change-email', authenticate, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) return res.status(401).json({ error: 'No token' });
-    
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, config.JWT_SECRET);
-    
     const { newEmail } = req.body;
-    if (!newEmail) return res.status(400).json({ error: 'Missing email' });
+    const cleanNewEmail = String(newEmail || '').trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanNewEmail)) return res.status(400).json({ error: 'Invalid email address' });
 
-    const existing = await User.findOne({ where: { email: newEmail } });
+    const existing = await User.findOne({ where: { email: cleanNewEmail } });
     if (existing) return res.status(409).json({ error: 'Email already in use' });
 
-    const user = await User.findByPk(decoded.userId);
+    const user = await User.findByPk(req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    await user.update({ email: newEmail });
+    await user.update({ email: cleanNewEmail });
     res.json({ message: 'Email changed successfully' });
   } catch (error) {
     res.status(401).json({ error: 'Unauthorized or error changing email' });

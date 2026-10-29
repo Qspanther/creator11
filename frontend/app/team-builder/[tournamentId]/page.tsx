@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use, useMemo } from 'react';
 import { useAuth } from '../../lib/auth-context';
-import { apiGet, apiPost } from '../../lib/api';
+import { apiGet, apiPost, apiPut } from '../../lib/api';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -253,20 +253,11 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
 
     try {
       if (existingTeam) {
-        const res = await fetch(`/api-backend/teams/${existingTeam}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            creatorIds: Array.from(selected),
-            captainId,
-            viceCaptainId,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Update failed');
+        await apiPut(`/teams/${existingTeam}`, {
+          creatorIds: Array.from(selected),
+          captainId,
+          viceCaptainId,
+        }, token);
       } else {
         const res = await apiPost('/teams', {
           tournamentId,

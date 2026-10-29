@@ -18,6 +18,8 @@ services:
         generateValue: true
       - key: BOT_API_KEY
         value: c11_bot_mgr_sec_9938a7fbc21d49e
+      - key: FRONTEND_URL
+        value: https://creator11-frontend.onrender.com
 
   # ─── FRONTEND NEXT.JS WEB APP ───
   - type: web

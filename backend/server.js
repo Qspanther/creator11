@@ -147,7 +147,8 @@ async function start() {
     startScheduler();
 
     // Start listening
-    app.listen(config.PORT, () => {
+    const HOST = process.env.HOST || '0.0.0.0';
+    app.listen(config.PORT, HOST, () => {
       console.log(`🚀 Creator11 API running on http://localhost:${config.PORT}`);
       console.log(`📋 Config endpoint: http://localhost:${config.PORT}/api/config`);
       console.log(`🏥 Health check: http://localhost:${config.PORT}/health`);

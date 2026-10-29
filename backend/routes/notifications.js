@@ -8,17 +8,6 @@ const router = express.Router();
 router.get('/', authenticate, async (req, res) => {
   try {
     const actualUserId = req.userId;
-    
-    // We only have global notifications right now, so we fetch where user_id is null or user_id matches.
-    // In our implementation, we've set `authenticate` middleware, which sets `req.user.userId`.
-    // Wait, the `authenticate` middleware uses `jwt.verify(token)` and usually sets `req.user`?
-    // Let's rely on the token decoded in middleware or just extract from header if we want to be safe.
-    const authHeader = req.headers.authorization;
-    const token = authHeader.split(' ')[1];
-    const jwt = require('jsonwebtoken');
-    const config = require('../config');
-    const decoded = jwt.verify(token, config.JWT_SECRET);
-    const actualUserId = decoded.userId;
 
     const notifications = await Notification.findAll({
       order: [['createdAt', 'DESC']],
@@ -31,7 +20,7 @@ router.get('/', authenticate, async (req, res) => {
       let readByArray = [];
       try {
         readByArray = JSON.parse(nObj.read_by || '[]');
-      } catch(e) {}
+      } catch (e) {}
       
       nObj.isRead = readByArray.includes(actualUserId);
       delete nObj.read_by; // don't send large arrays to frontend
@@ -48,12 +37,7 @@ router.get('/', authenticate, async (req, res) => {
 // Mark notification as read
 router.put('/:id/read', authenticate, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader.split(' ')[1];
-    const jwt = require('jsonwebtoken');
-    const config = require('../config');
-    const decoded = jwt.verify(token, config.JWT_SECRET);
-    const actualUserId = decoded.userId;
+    const actualUserId = req.userId;
 
     const notification = await Notification.findByPk(req.params.id);
     if (!notification) return res.status(404).json({ error: 'Not found' });
@@ -61,7 +45,7 @@ router.put('/:id/read', authenticate, async (req, res) => {
     let readByArray = [];
     try {
       readByArray = JSON.parse(notification.read_by || '[]');
-    } catch(e) {}
+    } catch (e) {}
 
     if (!readByArray.includes(actualUserId)) {
       readByArray.push(actualUserId);
@@ -79,19 +63,14 @@ router.put('/:id/read', authenticate, async (req, res) => {
 // Mark all as read
 router.put('/read-all', authenticate, async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader.split(' ')[1];
-    const jwt = require('jsonwebtoken');
-    const config = require('../config');
-    const decoded = jwt.verify(token, config.JWT_SECRET);
-    const actualUserId = decoded.userId;
+    const actualUserId = req.userId;
 
     const notifications = await Notification.findAll();
     for (const notification of notifications) {
       let readByArray = [];
       try {
         readByArray = JSON.parse(notification.read_by || '[]');
-      } catch(e) {}
+      } catch (e) {}
       
       if (!readByArray.includes(actualUserId)) {
         readByArray.push(actualUserId);

@@ -1,6 +1,19 @@
 import type { NextConfig } from "next";
 
-const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+let rawBackendUrl = (process.env.BACKEND_URL || 'http://localhost:5000').trim();
+
+// Ensure destination URL starts with http:// or https:// for Next.js rewrites
+if (!rawBackendUrl.startsWith('http://') && !rawBackendUrl.startsWith('https://')) {
+  if (rawBackendUrl.includes('.onrender.com')) {
+    rawBackendUrl = `https://${rawBackendUrl}`;
+  } else if (!rawBackendUrl.includes(':')) {
+    rawBackendUrl = `http://${rawBackendUrl}:10000`;
+  } else {
+    rawBackendUrl = `http://${rawBackendUrl}`;
+  }
+}
+
+const backendUrl = rawBackendUrl.replace(/\/+$/, '');
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: [

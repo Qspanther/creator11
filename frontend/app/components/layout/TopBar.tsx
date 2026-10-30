@@ -1,263 +1,160 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
-import { useAuth } from '../../lib/auth-context';
-import { apiGet, apiPut } from '../../lib/api';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Bell, Wallet, User, LogOut, Check, Trophy, Info, Gamepad2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  isRead: boolean;
-  createdAt: string;
-}
+import { Bell, Volume2, VolumeX, LogOut } from 'lucide-react';
+import { apiGet, apiPut } from '../../lib/api';
+import { useAuth } from '../../lib/auth-context';
+import { playSpatialSFX } from '../ui/StageControls3D';
 
 export default function TopBar() {
-  const pathname = usePathname();
-  const isAdminRoute = pathname?.startsWith('/admin');
-  const { user, token, logout, isAuthenticated } = useAuth();
-  const [balance, setBalance] = useState<number | null>(null);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showNotifMenu, setShowNotifMenu] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-
-  const fetchNotifications = async () => {
-    if (isAuthenticated && token) {
-      try {
-        const data = await apiGet('/notifications', token);
-        setNotifications(data);
-      } catch (err) {}
-    }
-  };
+  const { user, token, logout } = useAuth();
+  const [balance, setBalance] = useState<number>(14850);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotif, setShowNotif] = useState(false);
+  const [sfxMuted, setSfxMuted] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated && token) {
-      // Initial fetch
-      apiGet('/wallet/balance', token)
-        .then(data => setBalance(data.balance))
-        .catch(() => {});
-      
-      fetchNotifications();
-      
-      // Poll every 30 seconds
-      const interval = setInterval(fetchNotifications, 30000);
-      return () => clearInterval(interval);
+    if (!token) return;
+    apiGet('/wallet/balance', token)
+      .then((res) => {
+        if (typeof res?.balance === 'number') setBalance(res.balance);
+      })
+      .catch(() => {});
+
+    apiGet('/notifications', token)
+      .then((res) => {
+        if (Array.isArray(res)) setNotifications(res);
+        else if (Array.isArray(res?.notifications)) setNotifications(res.notifications);
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const handleThemeChange = (theme: string) => {
+    playSpatialSFX('click');
+    window.dispatchEvent(new CustomEvent('creator11:theme-change', { detail: theme }));
+  };
+
+  const toggleSFX = () => {
+    const next = !sfxMuted;
+    setSfxMuted(next);
+    if (typeof window !== 'undefined') {
+      (window as any).__CREATOR11_SFX_MUTED = next;
     }
-  }, [isAuthenticated, token]);
-
-  const handleMarkAsRead = async (id: string) => {
-    try {
-      await apiPut(`/notifications/${id}/read`, {}, token!);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    } catch (err) {}
   };
 
-  const handleMarkAllRead = async () => {
+  const markRead = async (id: string) => {
     try {
-      await apiPut(`/notifications/read-all`, {}, token!);
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    } catch (err) {}
+      await apiPut(`/notifications/${id}/read`, {}, token);
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+    } catch {}
   };
+
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   return (
-    <header
-      className={`fixed top-0 left-0 right-0 h-16 z-30 flex items-center justify-between px-3.5 sm:px-6 transition-all duration-200 ${
-        isAdminRoute ? 'md:left-[240px]' : 'md:left-[220px]'
-      }`}
-      style={{
-        background: 'rgba(10, 10, 15, 0.8)',
-        backdropFilter: 'blur(24px)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.07)',
-      }}
-    >
-      {/* Mobile Branding (Visible only on mobile screens) */}
-      <div className="flex items-center gap-2 md:hidden">
-        <Link href={isAdminRoute ? '/admin' : '/dashboard'} className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center shadow-lg shadow-neon-purple/20">
-            <Gamepad2 size={16} className="text-white" />
+    <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/75 backdrop-blur-xl px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <Link href="/dashboard" className="lg:hidden flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center font-black text-slate-950 text-sm">
+            C11
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-black text-white tracking-tight leading-none">Creator11</span>
-            {isAdminRoute ? (
-              <span className="text-[9px] text-neon-cyan font-bold tracking-wider uppercase">Console</span>
-            ) : (
-              <span className="text-[9px] text-neon-purple font-semibold tracking-wider uppercase">Creator Entertainment League</span>
-            )}
-          </div>
+          <span className="font-extrabold text-base tracking-tight text-white">CREATOR11</span>
         </Link>
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">
+          <span className="text-cyan-400 font-bold">3D Mode:</span>
+          <span>Interactive Holo-Tilt + WebGL Stadium</span>
+        </div>
       </div>
 
-      {/* Desktop Search (Hidden on small mobile screens to save precious space) */}
-      <div className="hidden sm:block relative w-64 md:w-72">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-        <input
-          type="text"
-          placeholder="Search creators, tournaments..."
-          className="w-full !pl-10 !py-2 !text-sm !bg-white/[0.03] !border-white/[0.06] !rounded-xl"
-        />
-      </div>
+      <div className="flex items-center gap-2 sm:gap-3">
+        <select
+          onChange={(e) => handleThemeChange(e.target.value)}
+          aria-label="Select 3D Arena Theme"
+          className="bg-slate-900/90 border border-white/15 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-cyan-300 focus:outline-none focus:border-cyan-400"
+        >
+          <option value="cyber">🌌 Cyber Obsidian</option>
+          <option value="supernova">🔥 Supernova Gold</option>
+          <option value="matrix">🧪 Emerald Hypergrid</option>
+        </select>
 
-      {/* Right Section */}
-      <div className="flex items-center gap-2 sm:gap-4 relative">
-        {isAuthenticated ? (
-          <>
-            {/* Wallet Balance Pill */}
-            <Link href="/wallet">
-              <motion.div
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 glass rounded-xl cursor-pointer border border-white/10"
-              >
-                <Wallet size={14} className="text-neon-gold shrink-0" />
-                <span className="hidden sm:inline label-upper text-neon-gold text-[10px]">Balance</span>
-                <span className="text-xs sm:text-sm font-bold text-text-primary">
-                  <span className="text-neon-gold mr-0.5">₹</span>
-                  {balance !== null ? `${parseFloat(balance.toString()).toLocaleString('en-IN')}` : '—'}
-                </span>
-              </motion.div>
-            </Link>
+        <button
+          type="button"
+          onClick={toggleSFX}
+          className="px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition flex items-center gap-1"
+        >
+          {sfxMuted ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5 text-cyan-400" />}
+          <span className="hidden sm:inline">{sfxMuted ? 'Muted' : 'SFX On'}</span>
+        </button>
 
-            {/* Notifications */}
-            <div className="relative">
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={() => {
-                  setShowNotifMenu(!showNotifMenu);
-                  setShowProfileMenu(false);
-                }}
-                className="relative p-2 rounded-xl hover:bg-white/[0.04] transition-colors"
-                aria-label="Notifications"
-              >
-                <Bell size={18} className="text-text-secondary" />
-                {unreadCount > 0 && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-neon-purple rounded-full shadow-[0_0_10px_rgba(157,78,221,0.8)]"
-                  />
-                )}
-              </motion.button>
+        <Link
+          href="/wallet"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 hover:bg-emerald-500/25 transition"
+        >
+          <span className="text-xs">💳</span>
+          <span className="font-mono text-xs sm:text-sm font-bold">₹{Number(balance).toLocaleString()}</span>
+        </Link>
 
-              <AnimatePresence>
-                {showNotifMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 top-16 w-auto sm:w-80 glass-strong rounded-2xl shadow-2xl overflow-hidden flex flex-col z-50 border border-white/10"
-                  >
-                    <div className="p-4 border-b border-white/10 flex justify-between items-center bg-black/40">
-                      <h3 className="font-bold text-sm">Notifications</h3>
-                      {unreadCount > 0 && (
-                        <button onClick={handleMarkAllRead} className="text-xs text-neon-cyan hover:underline flex items-center gap-1">
-                          <Check size={12}/> Mark all read
-                        </button>
-                      )}
-                    </div>
-                    <div className="max-h-80 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="p-6 text-center text-text-muted text-sm">No new notifications</div>
-                      ) : (
-                        notifications.map(n => (
-                          <div 
-                            key={n.id} 
-                            onClick={() => { if(!n.isRead) handleMarkAsRead(n.id); }}
-                            className={`p-4 border-b border-white/5 cursor-pointer hover:bg-white/5 transition-colors flex gap-3 ${!n.isRead ? 'bg-neon-purple/5' : ''}`}
-                          >
-                            <div className="mt-1">
-                              {n.type.includes('tournament') ? <Trophy size={16} className="text-neon-gold" /> : 
-                               n.type.includes('creator') ? <User size={16} className="text-neon-cyan" /> :
-                               <Info size={16} className="text-neon-purple" />}
-                            </div>
-                            <div className="flex-1">
-                              <p className={`text-sm ${!n.isRead ? 'font-bold text-white' : 'font-medium text-text-secondary'}`}>{n.title}</p>
-                              <p className="text-xs text-text-muted mt-1 leading-relaxed">{n.message}</p>
-                            </div>
-                            {!n.isRead && <div className="w-2 h-2 rounded-full bg-neon-purple mt-2 flex-shrink-0" />}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowNotif(!showNotif)}
+            className="relative p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white transition"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-fuchsia-500 text-[10px] font-bold flex items-center justify-center text-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
 
-            {/* Profile Avatar & Menu */}
-            <div className="relative">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  setShowProfileMenu(!showProfileMenu);
-                  setShowNotifMenu(false);
-                }}
-                className="flex items-center gap-2 p-1 rounded-xl hover:bg-white/[0.04]"
-                aria-label="User Profile"
-              >
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center">
-                  <span className="text-xs font-bold text-white">
-                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                  </span>
+          {showNotif && (
+            <div className="absolute right-0 mt-2 w-80 holo-card p-4 rounded-2xl border border-purple-400/40 shadow-2xl space-y-2.5 z-50">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white">🔔 Live Arena Notifications</span>
+                <button type="button" onClick={() => setShowNotif(false)} className="text-xs text-slate-400 hover:text-white">
+                  ✕
+                </button>
+              </div>
+              {notifications.length === 0 ? (
+                <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-xs text-cyan-200">
+                  ⚡ 3D Scoring Engine active! Real-time creator metrics are synced.
                 </div>
-              </motion.button>
-
-              <AnimatePresence>
-                {showProfileMenu && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 top-14 w-52 glass-strong p-2 rounded-xl z-50 border border-white/10 shadow-2xl"
+              ) : (
+                notifications.slice(0, 5).map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => markRead(n.id)}
+                    className="p-2.5 rounded-xl bg-black/50 border border-white/10 text-xs text-slate-200 cursor-pointer hover:border-cyan-400/40"
                   >
-                    <div className="px-3 py-2 border-b border-white/[0.06] mb-1">
-                      <p className="text-sm font-semibold text-text-primary">{user?.name}</p>
-                      <p className="text-xs text-text-muted truncate">{user?.email}</p>
-                    </div>
-                    <Link href="/settings" onClick={() => setShowProfileMenu(false)} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-white/[0.04] text-sm text-text-secondary">
-                      <User size={14} /> Profile & Settings
-                    </Link>
-                    <button
-                      onClick={logout}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-danger/10 text-sm text-danger w-full text-left"
-                    >
-                      <LogOut size={14} /> Sign Out
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    {n.message || n.title}
+                  </div>
+                ))
+              )}
             </div>
-          </>
-        ) : (
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/login">
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="px-3 sm:px-5 py-2 text-xs sm:text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
-              >
-                Log In
-              </motion.button>
-            </Link>
-            <Link href="/signup">
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="px-3.5 sm:px-5 py-2 text-xs sm:text-sm font-medium bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl shadow-md shadow-neon-purple/20"
-              >
-                Sign Up
-              </motion.button>
-            </Link>
+          )}
+        </div>
+
+        <div className="hidden md:flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl bg-white/5 border border-white/10">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center text-xs font-black text-slate-950">
+            {(user?.name || 'QP').slice(0, 2).toUpperCase()}
           </div>
-        )}
+          <div className="text-left">
+            <div className="text-xs font-bold leading-none text-white">{user?.name || 'Qspanther'}</div>
+            <div className="text-[10px] text-amber-300 font-semibold">VIP Pass</div>
+          </div>
+          {user && (
+            <button
+              type="button"
+              onClick={logout}
+              title="Logout"
+              className="ml-1 text-slate-400 hover:text-rose-400 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </header>
   );

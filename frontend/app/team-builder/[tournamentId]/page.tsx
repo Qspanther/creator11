@@ -8,10 +8,11 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Crown, Star, Check, X, Search,
-  Coins, Users, ArrowRight, Info, ExternalLink,
-  Flame, Sparkles, TrendingUp, Eye, Heart, Tv, Camera, Lock as LockIcon,
+  Coins, Users, ArrowRight, Sparkles, TrendingUp, Eye, Heart, Video,
   AlertCircle, ShieldCheck
 } from 'lucide-react';
+import TiltCard3D from '../../components/ui/TiltCard3D';
+import { playSpatialSFX } from '../../components/ui/StageControls3D';
 
 interface Creator {
   id: string;
@@ -36,7 +37,7 @@ interface AppConfig {
   viceCaptainMultiplier: number;
 }
 
-export default function TeamBuilderPage({ params }: { params: Promise<{ tournamentId: string }> }) {
+export default function TeamBuilder3DPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const { tournamentId } = use(params);
   const { token } = useAuth();
   const router = useRouter();
@@ -50,18 +51,17 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'cost_desc' | 'cost_asc' | 'name'>('cost_desc');
+  const [pitchTilt, setPitchTilt] = useState<number>(22);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [existingTeam, setExistingTeam] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [hasActivePass, setHasActivePass] = useState<boolean | null>(null);
-
-  // Profile modal state
   const [modalCreator, setModalCreator] = useState<Creator | null>(null);
-  const [mobileTab, setMobileTab] = useState<'roster' | 'studio'>('roster');
 
   useEffect(() => {
+    window.dispatchEvent(new CustomEvent('creator11:camera-preset', { detail: 'stadium' }));
     if (!token) return;
 
     Promise.all([
@@ -72,8 +72,8 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
       setTournament(t);
       setConfig(c);
 
-      apiGet(`/creators?platform=${t.platform}&sort=${sortBy}`, token)
-        .then(data => setCreators(data))
+      apiGet(`/creators?platform=youtube&sort=${sortBy}`, token)
+        .then((data) => setCreators(data))
         .finally(() => setLoading(false));
 
       if (team && team.id) {
@@ -84,18 +84,16 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
         if (team.vice_captain_creator_id) setViceCaptainId(team.vice_captain_creator_id);
       }
 
-      // Fetch wallet balance to verify ₹99 entry fee requirement
       apiGet('/wallet/balance', token)
-        .then(wb => {
+        .then((wb) => {
           if (wb && wb.balance !== undefined) {
             setWalletBalance(parseFloat(wb.balance));
           }
         })
         .catch(() => {});
 
-      // Fetch user pass status
       apiGet('/auth/me', token)
-        .then(u => {
+        .then((u) => {
           if (u) {
             setHasActivePass(Boolean(u.hasActiveSubscription));
           }
@@ -106,12 +104,12 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
 
   const creatorsById = useMemo(() => {
     const map: Record<string, Creator> = {};
-    creators.forEach(c => { map[c.id] = c; });
+    creators.forEach((c) => { map[c.id] = c; });
     return map;
   }, [creators]);
 
   const selectedCreators = useMemo(() =>
-    Array.from(selected).map(id => creatorsById[id]).filter(Boolean),
+    Array.from(selected).map((id) => creatorsById[id]).filter(Boolean),
     [selected, creatorsById]
   );
 
@@ -122,7 +120,7 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    selectedCreators.forEach(c => {
+    selectedCreators.forEach((c) => {
       counts[c.category] = (counts[c.category] || 0) + 1;
     });
     return counts;
@@ -131,14 +129,10 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
   const maxCredits = config?.totalCredits || 125;
   const totalRequired = config?.totalTeamSize || 11;
 
-  // Category with 3 players check (only ONE category can have 3)
   const categoryWithThree = useMemo(() => {
-    return Object.keys(categoryCounts).find(cat => (categoryCounts[cat] || 0) >= 3) || null;
+    return Object.keys(categoryCounts).find((cat) => (categoryCounts[cat] || 0) >= 3) || null;
   }, [categoryCounts]);
 
-  // Dynamic max allowed for each category:
-  // - If a category already has 3: that category max = 3, other categories max = 2
-  // - If no category has 3 yet: any category can reach up to 3
   const getCategoryMax = (cat: string) => {
     if (categoryWithThree) {
       return categoryWithThree === cat ? 3 : 2;
@@ -148,28 +142,25 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
 
   const filteredCreators = useMemo(() => {
     let list = [...creators];
-
     if (activeCategory !== 'All') {
-      list = list.filter(c => c.category === activeCategory);
+      list = list.filter((c) => c.category === activeCategory);
     }
-
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      list = list.filter(c =>
+      list = list.filter((c) =>
         c.name.toLowerCase().includes(q) ||
         c.category.toLowerCase().includes(q) ||
         (c.external_channel_id && c.external_channel_id.toLowerCase().includes(q))
       );
     }
-
     if (sortBy === 'cost_desc') list.sort((a, b) => parseFloat(b.credit_cost) - parseFloat(a.credit_cost));
     else if (sortBy === 'cost_asc') list.sort((a, b) => parseFloat(a.credit_cost) - parseFloat(b.credit_cost));
     else if (sortBy === 'name') list.sort((a, b) => a.name.localeCompare(b.name));
-
     return list;
   }, [creators, activeCategory, searchQuery, sortBy]);
 
   const toggleCreator = (creator: Creator) => {
+    playSpatialSFX('click');
     const isSelected = selected.has(creator.id);
 
     if (isSelected) {
@@ -206,6 +197,35 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
       next.add(creator.id);
       setSelected(next);
       setError('');
+
+      if (!captainId) setCaptainId(creator.id);
+      else if (!viceCaptainId && captainId !== creator.id) setViceCaptainId(creator.id);
+    }
+  };
+
+  const autoDraftSmart11 = () => {
+    playSpatialSFX('power');
+    const cats = config?.categories || ['Gaming', 'Vlogging', 'Comedy', 'Tech', 'Lifestyle'];
+    const byCat: Record<string, Creator[]> = {};
+    cats.forEach((c) => {
+      byCat[c] = creators
+        .filter((item) => item.category === c)
+        .sort((a, b) => parseFloat(a.credit_cost) - parseFloat(b.credit_cost));
+    });
+
+    const pickedIds = new Set<string>();
+    const firstCat = cats[0];
+    byCat[firstCat]?.slice(0, 3).forEach((c) => pickedIds.add(c.id));
+    cats.slice(1).forEach((c) => {
+      byCat[c]?.slice(0, 2).forEach((item) => pickedIds.add(item.id));
+    });
+
+    if (pickedIds.size === 11) {
+      setSelected(pickedIds);
+      const arr = Array.from(pickedIds);
+      setCaptainId(arr[0]);
+      setViceCaptainId(arr[1]);
+      setError('🤖 Smart AI Auto-Drafted compliant 11-Creator Lineup!');
     }
   };
 
@@ -225,9 +245,13 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
   const isReadyToSave = isTeamComplete && captainId && viceCaptainId && captainId !== viceCaptainId && creditsUsed <= maxCredits;
 
   const handleSave = async () => {
-    if (!isReadyToSave) return;
+    if (!isReadyToSave) {
+      if (selected.size !== 11) setError('Please select exactly 11 creators.');
+      else if (!isCategoryDistributionValid) setError('Category rule: exactly 1 category with 3, and 4 categories with 2 creators.');
+      else if (!captainId || !viceCaptainId) setError('Please assign both Captain (2.0x) and Vice-Captain (1.5x).');
+      return;
+    }
 
-    // Check Active Tournament Pass (Monthly Subscription or Referral Free Pass)
     if (!existingTeam && hasActivePass === false) {
       setError('Active Monthly Subscription or Referral Pass is required to enter tournaments. Redirecting...');
       setTimeout(() => {
@@ -236,832 +260,430 @@ export default function TeamBuilderPage({ params }: { params: Promise<{ tourname
       return;
     }
 
-    // Strict ₹99 entry fee pre-check for entering tournament
     if (!existingTeam) {
-      const entryFee = 99.00;
+      const entryFee = parseFloat(tournament?.entry_fee || '99');
       if (walletBalance !== null && walletBalance < entryFee) {
-        setError(`Insufficient wallet balance: ₹99.00 is required to lock and enter this contest. Your current balance is ₹${walletBalance.toFixed(2)}. Redirecting to deposit...`);
+        setError(`Insufficient wallet balance: ₹${entryFee.toFixed(2)} required. Redirecting to deposit...`);
         setTimeout(() => {
-          router.push(`/wallet?required=99&reason=contest_entry&tournamentId=${tournamentId}`);
+          router.push(`/wallet?required=${entryFee}&reason=contest_entry&tournamentId=${tournamentId}`);
         }, 1000);
         return;
       }
     }
 
+    playSpatialSFX('power');
     setSaving(true);
     setError('');
 
     try {
       if (existingTeam) {
-        await apiPut(`/teams/${existingTeam}`, {
-          creatorIds: Array.from(selected),
-          captainId,
-          viceCaptainId,
-        }, token);
+        await apiPut(
+          `/teams/${existingTeam}`,
+          {
+            creatorIds: Array.from(selected),
+            captainId,
+            viceCaptainId,
+          },
+          token
+        );
       } else {
-        const res = await apiPost('/teams', {
-          tournamentId,
-          creatorIds: Array.from(selected),
-          captainId,
-          viceCaptainId,
-        }, token);
-
-        if (res?.requiresSubscription) {
-          setError('Active Monthly Subscription or Referral Pass is required. Redirecting...');
-          setTimeout(() => {
-            router.push(`/subscription?reason=tournament_access&tournamentId=${tournamentId}`);
-          }, 1200);
-          return;
-        }
-
-        if (res?.requiresDeposit || res?.error?.includes('Insufficient wallet balance')) {
-          router.push(`/wallet?required=99&reason=contest_entry&tournamentId=${tournamentId}`);
-          return;
-        }
+        await apiPost(
+          '/teams',
+          {
+            tournamentId,
+            creatorIds: Array.from(selected),
+            captainId,
+            viceCaptainId,
+          },
+          token
+        );
       }
       router.push('/my-teams');
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : 'Failed to save team';
       setError(errMsg);
-      if (errMsg.toLowerCase().includes('insufficient') || errMsg.includes('₹99') || errMsg.toLowerCase().includes('deposit')) {
-        setTimeout(() => {
-          router.push(`/wallet?required=99&reason=contest_entry&tournamentId=${tournamentId}`);
-        }, 1200);
-      }
     } finally {
       setSaving(false);
     }
   };
 
-  const categories = ['All', ...(config?.categories || ['Gaming', 'Vlogging', 'Comedy', 'Tech', 'Lifestyle'])];
-
-  // Helper fallback portrait generator
-  const getPortraitUrl = (creator: any) => {
-    const rawUrl = typeof creator === 'string' ? creator : creator?.profile_image_url;
-    if (!rawUrl || typeof rawUrl !== 'string') {
-      return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
-    }
-    if (rawUrl.includes('localhost:5000/uploads/') || rawUrl.includes('127.0.0.1:5000/uploads/')) {
-      return rawUrl.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/uploads\//, '/api-backend/uploads/');
-    }
-    if (rawUrl.startsWith('/api-backend/') || rawUrl.startsWith('/uploads/')) {
-      return rawUrl;
-    }
-    if (rawUrl.startsWith('https://') || rawUrl.startsWith('http://')) {
-      return rawUrl;
-    }
-    return `/api-backend/uploads/${rawUrl.replace(/^\/+/, '')}`;
-  };
+  const formationRows = [[0], [1, 2], [3, 4, 5, 6], [7, 8, 9, 10]];
+  const rowLabels = ['APEX CAPTAIN STAGE', 'FRONT VIRAL WINGS', 'MID ENGAGEMENT CORE', 'BASE LINE ANCHORS'];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-32">
-        <div className="w-10 h-10 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="widescreen-container py-4">
-      {/* Top Banner / Match Info */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card p-6 mb-8 border border-white/10"
-      >
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+    <div className="px-4 sm:px-8 py-6 max-w-7xl mx-auto w-full space-y-6">
+      {/* 3D Draft Controls Bar */}
+      <TiltCard3D intensity={6} className="p-5 border border-cyan-400/40">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30">
-                Battle Lineup Formation
-              </span>
-              <span className="text-xs text-text-muted capitalize">
-                {tournament?.platform} • {tournament?.duration_type || '24h'} Battle
-              </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono uppercase text-cyan-400">3D HOLOGRAPHIC DRAFT</span>
+              <span className="text-xs text-slate-400">• {tournament?.name}</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
-              <Shield size={28} className="text-neon-cyan" />
-              {tournament?.name}
-            </h1>
+            <h1 className="text-2xl sm:text-3xl font-black mt-1 text-white">Assemble Your 11-Creator 3D Lineup</h1>
+            <p className="text-xs sm:text-sm text-slate-300">
+              Draft <strong className="text-cyan-300">11 YouTube Stars</strong> (3+2+2+2+2) within{' '}
+              <strong className="text-amber-300">{maxCredits} Credits</strong>. Assign{' '}
+              <strong className="text-amber-300">Captain (2.0x)</strong> & <strong className="text-purple-300">Vice-Captain (1.5x)</strong>.
+            </p>
+            {error && <p className="text-xs font-bold text-amber-300 mt-1">{error}</p>}
           </div>
 
-          {/* Quick Metrics */}
-          <div className="flex items-center gap-6 bg-black/40 px-5 py-3 rounded-2xl border border-white/5">
-            <div>
-              <p className="text-[10px] text-text-muted font-bold tracking-wider uppercase">Entry Fee</p>
-              <p className="text-base font-extrabold text-neon-cyan">₹{tournament?.entry_fee}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="px-3.5 py-1.5 rounded-xl bg-black/50 border border-white/10 text-center">
+              <div className="text-[10px] uppercase text-slate-400">Creators</div>
+              <div className="text-base font-black font-mono text-cyan-300">{selected.size} / 11</div>
             </div>
-            <div className="w-px h-8 bg-white/10" />
-            <div>
-              <p className="text-[10px] text-text-muted font-bold tracking-wider uppercase">Prize Pool</p>
-              <p className="text-base font-extrabold text-neon-gold">₹{tournament?.prize_pool}</p>
+            <div className="px-3.5 py-1.5 rounded-xl bg-black/50 border border-white/10 text-center">
+              <div className="text-[10px] uppercase text-slate-400">Credits Left</div>
+              <div className={`text-base font-black font-mono ${creditsUsed > maxCredits ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {(maxCredits - creditsUsed).toFixed(1)} CR
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={autoDraftSmart11}
+              className="px-3.5 py-2 rounded-xl font-bold text-xs bg-purple-600/40 border border-purple-400/50 text-purple-100 hover:bg-purple-600/60 transition cursor-pointer"
+            >
+              🤖 Smart Auto-Draft 11
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                playSpatialSFX('click');
+                setSelected(new Set());
+                setCaptainId(null);
+                setViceCaptainId(null);
+              }}
+              className="px-3 py-2 rounded-xl font-semibold text-xs bg-white/5 border border-white/10 text-slate-300 hover:text-white transition cursor-pointer"
+            >
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className={`px-5 py-2 rounded-xl font-black text-xs sm:text-sm transition cursor-pointer ${
+                isReadyToSave
+                  ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 shadow-lg hover:opacity-95'
+                  : 'bg-white/10 text-slate-400 border border-white/10'
+              }`}
+            >
+              {saving ? 'Saving...' : existingTeam ? 'Update Team' : '🔒 Lock & Save 3D Team'}
+            </button>
           </div>
         </div>
+      </TiltCard3D>
 
-        {/* Global Progress Bar Bar */}
-        <div className="mt-6 pt-5 border-t border-white/5 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="bg-white/[0.02] p-3 rounded-xl border border-white/5">
-            <div className="flex items-center justify-between mb-1">
-              <span className="label-upper">Credits Left</span>
-              <Coins size={14} className="text-neon-gold" />
+      <div className="grid lg:grid-cols-12 gap-6 items-start">
+        {/* Left 7 Cols: 3D Holographic Stadium Pitch */}
+        <div className="lg:col-span-7 space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <div className="text-xs font-bold text-cyan-300">
+              🏟️ 3D Holographic Arena Pitch <span className="text-slate-400 font-normal">(1-2-4-4 Tactical Formation)</span>
             </div>
-            <p className={`text-lg font-black ${creditsUsed > maxCredits ? 'text-danger' : 'text-neon-gold'}`}>
-              {(maxCredits - creditsUsed).toFixed(1)} <span className="text-xs text-text-muted font-normal">/ {maxCredits}</span>
-            </p>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-slate-400">3D Tilt:</span>
+              <input
+                type="range"
+                min={0}
+                max={34}
+                value={pitchTilt}
+                onChange={(e) => setPitchTilt(Number(e.target.value))}
+                className="w-24 accent-cyan-400"
+              />
+            </div>
           </div>
 
-          <div className="bg-white/[0.02] p-3 rounded-xl border border-white/5">
-            <div className="flex items-center justify-between mb-1">
-              <span className="label-upper">Selected Lineup</span>
-              <Users size={14} className="text-neon-cyan" />
-            </div>
-            <p className="text-lg font-black text-text-primary">
-              {selected.size} <span className="text-xs text-text-muted font-normal">/ {totalRequired}</span>
-            </p>
-          </div>
+          <div className="stadium-pitch-wrapper py-2">
+            <div
+              style={{ ['--pitch-angle' as any]: `${pitchTilt}deg` }}
+              className="stadium-pitch-surface rounded-3xl p-5 sm:p-7 min-h-[500px] flex flex-col justify-between relative overflow-hidden"
+            >
+              <div className="space-y-4 relative z-10">
+                {formationRows.map((rowIndices, rIdx) => (
+                  <div key={rIdx} className="space-y-1.5">
+                    <div className="text-center text-[10px] font-mono uppercase tracking-widest text-cyan-300/70">
+                      {rowLabels[rIdx]}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
+                      {rowIndices.map((slotIndex) => {
+                        const player = selectedCreators[slotIndex];
+                        if (!player) {
+                          return (
+                            <div
+                              key={slotIndex}
+                              className="pedestal-slot flex flex-col items-center justify-center p-2 rounded-2xl border border-dashed border-cyan-400/35 bg-slate-950/60 w-24 sm:w-28 h-26 text-center"
+                            >
+                              <div className="w-7 h-7 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-[11px] text-slate-400 font-mono">
+                                #{slotIndex + 1}
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-1">Open Slot</div>
+                            </div>
+                          );
+                        }
 
-          <div className="bg-white/[0.02] p-3 rounded-xl border border-white/5">
-            <div className="flex items-center justify-between mb-1">
-              <span className="label-upper">Captain (2.0x)</span>
-              <Crown size={14} className="text-neon-gold" />
-            </div>
-            <p className="text-xs font-bold text-text-primary truncate">
-              {captainId ? creatorsById[captainId]?.name : <span className="text-text-muted font-normal">Not chosen</span>}
-            </p>
-          </div>
+                        const isCap = captainId === player.id;
+                        const isVC = viceCaptainId === player.id;
+                        const initials = player.name
+                          .split(' ')
+                          .map((w) => w[0])
+                          .join('')
+                          .slice(0, 2)
+                          .toUpperCase();
 
-          <div className="bg-white/[0.02] p-3 rounded-xl border border-white/5">
-            <div className="flex items-center justify-between mb-1">
-              <span className="label-upper">Vice-Capt (1.5x)</span>
-              <Star size={14} className="text-neon-cyan" />
-            </div>
-            <p className="text-xs font-bold text-text-primary truncate">
-              {viceCaptainId ? creatorsById[viceCaptainId]?.name : <span className="text-text-muted font-normal">Not chosen</span>}
-            </p>
-          </div>
-        </div>
-      </motion.div>
+                        return (
+                          <div
+                            key={slotIndex}
+                            className={`pedestal-slot pedestal-ring flex flex-col items-center justify-between p-2 rounded-2xl bg-gradient-to-b from-slate-900/95 to-purple-950/85 border ${
+                              isCap ? 'border-amber-400' : isVC ? 'border-purple-400' : 'border-cyan-400/50'
+                            } w-24 sm:w-28 h-26 text-center relative group`}
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              {isCap ? (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-400 text-slate-950">
+                                  👑 2x
+                                </span>
+                              ) : isVC ? (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-400 text-slate-950">
+                                  ⚡ 1.5x
+                                </span>
+                              ) : (
+                                <span className="px-1 py-0.5 rounded text-[8px] font-mono bg-white/10 text-cyan-200">
+                                  {player.credit_cost}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => toggleCreator(player)}
+                                className="text-slate-400 hover:text-rose-400 text-[10px] font-bold"
+                              >
+                                ✕
+                              </button>
+                            </div>
 
-      {/* Mobile APK Tab Switcher (Mobile Only) */}
-      <div className="flex lg:hidden bg-obsidian-card/90 p-1 rounded-2xl border border-white/10 mb-4 sticky top-16 z-20 backdrop-blur-xl shadow-xl">
-        <button
-          type="button"
-          onClick={() => setMobileTab('roster')}
-          className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-            mobileTab === 'roster'
-              ? 'bg-neon-cyan text-black shadow-md shadow-neon-cyan/25 font-black'
-              : 'text-text-secondary hover:text-white'
-          }`}
-        >
-          <Users size={15} />
-          <span>Select Creators</span>
-          <span className="px-1.5 py-0.5 rounded-md text-[10px] bg-black/40 text-white font-mono font-bold">
-            {filteredCreators.length}
-          </span>
-        </button>
+                            <div
+                              onClick={() => setModalCreator(player)}
+                              className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-xs text-slate-950 cursor-pointer shadow"
+                            >
+                              {initials}
+                            </div>
 
-        <button
-          type="button"
-          onClick={() => setMobileTab('studio')}
-          className={`flex-1 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-            mobileTab === 'studio'
-              ? 'bg-gradient-to-r from-neon-purple to-neon-cyan text-white shadow-md shadow-neon-purple/25 font-black'
-              : 'text-text-secondary hover:text-white'
-          }`}
-        >
-          <Sparkles size={15} />
-          <span>Holo Studio</span>
-          <span className="px-2 py-0.5 rounded-md text-[10px] bg-white/20 text-white font-mono font-bold">
-            {selected.size}/{totalRequired}
-          </span>
-        </button>
-      </div>
+                            <div className="w-full truncate text-[10px] font-bold text-white px-0.5">
+                              {player.name}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-      {/* 2-COLUMN SPLIT LAYOUT */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        
-        {/* LEFT COLUMN: Filters & Creators Roster (60%) */}
-        <div className={`space-y-6 lg:col-span-7 xl:col-span-7 ${mobileTab === 'studio' ? 'hidden lg:block' : 'block'}`}>
-          
-          {/* Controls: Categories, Search, Sort */}
-          <div className="glass-card p-5 space-y-4">
-            {/* Category Filter Pills */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {categories.map(cat => {
-                if (cat === 'All') {
-                  const isActive = activeCategory === 'All';
-                  return (
-                    <button
-                      key="All"
-                      onClick={() => setActiveCategory('All')}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
-                        isActive
-                          ? 'bg-neon-cyan text-black shadow-lg shadow-neon-cyan/25 font-black scale-105'
-                          : 'bg-white/[0.04] text-text-secondary hover:text-white hover:bg-white/[0.08]'
-                      }`}
+              {/* Captain / VC Quick Assignment Bar */}
+              {selectedCreators.length > 0 && (
+                <div className="relative z-10 pt-3 border-t border-white/10 grid grid-cols-2 gap-3 bg-black/60 p-3 rounded-2xl backdrop-blur-md">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-amber-300 block mb-1">
+                      👑 Captain (2.0x Boost)
+                    </label>
+                    <select
+                      value={captainId || ''}
+                      onChange={(e) => {
+                        setCaptainId(e.target.value);
+                        if (e.target.value === viceCaptainId) setViceCaptainId(null);
+                      }}
+                      aria-label="Assign Captain (2.0x Boost)"
+                      className="w-full bg-slate-900 border border-white/20 rounded-xl px-2 py-1 text-xs text-white"
                     >
-                      <span>All</span>
-                    </button>
-                  );
-                }
+                      <option value="">Choose Captain</option>
+                      {selectedCreators.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.credit_cost} CR)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-purple-300 block mb-1">
+                      ⚡ Vice-Captain (1.5x Boost)
+                    </label>
+                    <select
+                      value={viceCaptainId || ''}
+                      onChange={(e) => {
+                        setViceCaptainId(e.target.value);
+                        if (e.target.value === captainId) setCaptainId(null);
+                      }}
+                      aria-label="Assign Vice-Captain (1.5x Boost)"
+                      className="w-full bg-slate-900 border border-white/20 rounded-xl px-2 py-1 text-xs text-white"
+                    >
+                      <option value="">Choose Vice-Captain</option>
+                      {selectedCreators.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.credit_cost} CR)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Right 5 Cols: Filterable Creator Selection Pool */}
+        <div className="lg:col-span-5 holo-card p-5 rounded-3xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-extrabold text-white">YouTube Draft Pool ({creators.length})</h2>
+            <span className="text-xs font-mono text-cyan-300">Verified Stats</span>
+          </div>
+
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search creator name or category..."
+                className="w-full pl-9 pr-3 py-2 bg-slate-900/90 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {['All', 'Gaming', 'Vlogging', 'Comedy', 'Tech', 'Lifestyle'].map((cat) => {
                 const count = categoryCounts[cat] || 0;
                 const catMax = getCategoryMax(cat);
                 const isLocked = count >= catMax;
                 const isActive = activeCategory === cat;
+
                 return (
                   <button
                     key={cat}
-                    onClick={() => setActiveCategory(cat)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${
+                    type="button"
+                    onClick={() => {
+                      playSpatialSFX('click');
+                      setActiveCategory(cat);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
                       isActive
-                        ? 'bg-neon-cyan text-black shadow-lg shadow-neon-cyan/25 font-black scale-105'
-                        : isLocked
-                          ? 'bg-white/[0.06] text-white/90 border border-white/10'
-                          : 'bg-white/[0.04] text-text-secondary hover:text-white hover:bg-white/[0.08]'
+                        ? 'bg-cyan-500/25 border border-cyan-400/50 text-cyan-200'
+                        : 'bg-white/5 border border-white/10 text-slate-300 hover:text-white'
                     }`}
                   >
                     <span>{cat}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                      isActive 
-                        ? 'bg-black/30 text-black' 
-                        : isLocked 
-                          ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40' 
-                          : 'bg-white/10 text-text-muted'
-                    }`}>
-                      {count}/{catMax} {isLocked ? '??' : ''}
-                    </span>
+                    {cat !== 'All' && (
+                      <span className="ml-1 text-[10px] opacity-75">
+                        ({count}/{catMax})
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
-
-            {/* Search and Sort */}
-            <div className="flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative flex-1 w-full">
-                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input
-                  type="text"
-                  placeholder="Search creators by name, channel, or niche..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full !pl-10 !py-2.5 !text-sm"
-                />
-              </div>
-
-              <select
-                value={sortBy}
-                onChange={e => setSortBy(e.target.value as any)}
-                className="!py-2.5 !px-3 !text-xs !w-full sm:!w-44 shrink-0"
-              >
-                <option value="cost_desc">Credits: High to Low</option>
-                <option value="cost_asc">Credits: Low to High</option>
-                <option value="name">Name: A to Z</option>
-              </select>
-            </div>
           </div>
 
-          {/* Lineup Rule Banner */}
-          <div className="p-3.5 rounded-2xl bg-gradient-to-r from-neon-cyan/[0.08] to-blue-500/[0.04] border border-neon-cyan/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs">
-            <div className="flex items-center gap-2.5">
-              <span className="text-base">?</span>
-              <p className="text-text-secondary leading-snug">
-                <strong className="text-white">11-Player Lineup Rule:</strong> Pick <strong className="text-neon-cyan">3 creators from only 1 category</strong>, and <strong className="text-neon-cyan">2 creators from each of the other 4 categories</strong> (3 + 2 + 2 + 2 + 2 = 11).
-              </p>
-            </div>
-            {categoryWithThree ? (
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-neon-cyan text-black shrink-0 shadow-sm shadow-neon-cyan/30">
-                ? 3rd Player: {categoryWithThree}
-              </span>
-            ) : (
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-white/10 text-white/80 shrink-0">
-                3-Player Slot Open
-              </span>
-            )}
-          </div>
+          <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
+            {filteredCreators.map((creator) => {
+              const isSelected = selected.has(creator.id);
+              const isCap = captainId === creator.id;
+              const isVC = viceCaptainId === creator.id;
 
-          {/* Roster Cards List */}
-          <div className="space-y-3">
-            {filteredCreators.length === 0 ? (
-              <div className="glass-card p-12 text-center text-text-muted">
-                <Users size={36} className="mx-auto mb-3 opacity-40" />
-                <p>No creators match your active filter.</p>
-              </div>
-            ) : (
-              filteredCreators.map(creator => {
-                const isSelected = selected.has(creator.id);
-                const isCaptain = captainId === creator.id;
-                const isVc = viceCaptainId === creator.id;
-                const count = categoryCounts[creator.category] || 0;
-                const catMax = getCategoryMax(creator.category);
-                const isCategoryLocked = count >= catMax;
-                const canPick = isSelected || (
-                  selected.size < totalRequired &&
-                  creditsUsed + parseFloat(creator.credit_cost) <= maxCredits &&
-                  !isCategoryLocked
-                );
-                const portrait = getPortraitUrl(creator);
-
-                return (
-                  <motion.div
-                    key={creator.id}
-                    layout
-                    whileHover={{ scale: 1.01 }}
-                    className={`p-4 rounded-2xl transition-all duration-200 border ${
-                      isSelected
-                        ? 'bg-neon-cyan/[0.07] border-neon-cyan/40 shadow-lg shadow-neon-cyan/10'
-                        : canPick
-                          ? 'glass-card border-white/5 hover:border-white/15'
-                          : 'glass-card border-white/5 opacity-40 cursor-not-allowed'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      {/* Portrait Thumbnail with Info Trigger */}
-                      <div className="relative group/avatar shrink-0">
-                        <div
-                          onClick={() => setModalCreator(creator)}
-                          className="w-14 h-14 rounded-2xl overflow-hidden cursor-pointer border border-white/10 group-hover/avatar:border-neon-cyan transition-all relative"
-                          title="Click to view full player profile card"
-                        >
-                          <img
-                            src={portrait}
-                            alt={creator.name}
-                            className="w-full h-full object-cover group-hover/avatar:scale-110 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center transition-opacity">
-                            <Info size={18} className="text-white" />
-                          </div>
-                        </div>
-
-                        {/* Platform indicator badge */}
-                        <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-black/80 flex items-center justify-center border border-white/10">
-                          {creator.platform === 'youtube' ? (
-                            <Tv size={10} className="text-red-500" />
-                          ) : (
-                            <Camera size={10} className="text-pink-500" />
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Creator Details */}
-                      <div className="flex-1 min-w-0" onClick={() => canPick && toggleCreator(creator)}>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-base font-bold text-text-primary truncate cursor-pointer hover:text-neon-cyan transition-colors">
-                            {creator.name}
-                          </h4>
-                          {isCaptain && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-neon-gold text-black">
-                              2x CAPTAIN
-                            </span>
-                          )}
-                          {isVc && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-neon-cyan text-black">
-                              1.5x VC
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-3 text-xs text-text-muted flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md bg-white/[0.04] text-text-secondary font-medium">
-                            {creator.category}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Eye size={12} className="text-neon-cyan" />
-                            {(creator.base_views || 0).toLocaleString()} Views
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <TrendingUp size={12} className="text-success" />
-                            {(Math.floor(Math.random() * 30) + 70)}% Picked
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Right side: Credit Cost & Action Button */}
-                      <div className="text-right flex items-center gap-3 shrink-0">
-                        <div className="px-3 py-1.5 rounded-xl bg-white/[0.03] border border-white/5">
-                          <p className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Credits</p>
-                          <p className="text-base font-extrabold text-neon-gold">
-                            {parseFloat(creator.credit_cost).toFixed(1)}
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={() => canPick && toggleCreator(creator)}
-                          disabled={!canPick && !isSelected}
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm transition-all duration-200 cursor-pointer ${
-                            isSelected
-                              ? 'bg-neon-cyan text-black shadow-md shadow-neon-cyan/25'
-                              : canPick
-                                ? 'bg-white/[0.06] text-white hover:bg-neon-cyan hover:text-black'
-                                : 'bg-white/[0.02] text-text-muted cursor-not-allowed opacity-50'
-                          }`}
-                        >
-                          {isSelected ? <Check size={18} /> : isCategoryLocked ? <LockIcon size={14} className="text-text-muted" /> : '+'}
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: Live Holographic Studio Stage (40% Sticky) */}
-        <div className={`space-y-4 lg:col-span-5 xl:col-span-5 lg:sticky lg:top-20 ${mobileTab === 'roster' ? 'hidden lg:block' : 'block'}`}>
-          <div className="studio-stage p-6">
-            
-            {/* Stage Grid Overlay */}
-            <div className="absolute inset-0 studio-grid-lines pointer-events-none opacity-40" />
-
-            {/* Stage Header */}
-            <div className="relative z-10 flex items-center justify-between mb-6 pb-4 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 border border-neon-cyan flex items-center justify-center">
-                  <Sparkles size={16} className="text-neon-cyan" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black uppercase tracking-wider text-white">Live Studio Stage</h3>
-                  <p className="text-[10px] text-neon-cyan/80">Holographic 11-Creator Lineup</p>
-                </div>
-              </div>
-
-              <div className="text-right flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMobileTab('roster')}
-                  className="lg:hidden px-2.5 py-1 rounded-full bg-white/10 text-[10px] font-bold text-white hover:bg-white/20 transition-colors"
+              return (
+                <div
+                  key={creator.id}
+                  className={`p-3 rounded-2xl border transition flex items-center justify-between gap-3 ${
+                    isSelected
+                      ? 'bg-purple-950/40 border-cyan-400/50'
+                      : 'bg-black/40 border-white/10 hover:border-white/20'
+                  }`}
                 >
-                  ← Roster
-                </button>
-                <span className="text-xs font-bold text-white bg-black/50 px-3 py-1 rounded-full border border-neon-cyan/30">
-                  {selected.size} / {totalRequired} Slotted
-                </span>
-              </div>
-            </div>
-
-            {/* Tactical Lineup Formation Grid (11 Slots) */}
-            <div className="relative z-10 grid grid-cols-3 sm:grid-cols-4 gap-2.5 mb-6">
-              {Array.from({ length: totalRequired }).map((_, index) => {
-                const player = selectedCreators[index];
-                const isCapt = player && captainId === player.id;
-                const isViceCapt = player && viceCaptainId === player.id;
-
-                if (!player) {
-                  return (
-                    <div
-                      key={index}
-                      className="h-28 rounded-2xl border-2 border-dashed border-white/15 bg-black/30 flex flex-col items-center justify-center text-center p-2"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-xs font-bold text-text-muted mb-1">
-                        {index + 1}
-                      </div>
-                      <span className="text-[9px] text-text-muted uppercase tracking-wider font-bold">Open Slot</span>
-                    </div>
-                  );
-                }
-
-                return (
-                  <motion.div
-                    key={player.id}
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className={`h-28 rounded-2xl p-2 relative flex flex-col items-center justify-between hologram-pedestal border ${
-                      isCapt
-                        ? 'border-neon-gold bg-neon-gold/[0.1]'
-                        : isViceCapt
-                          ? 'border-neon-cyan bg-neon-cyan/[0.1]'
-                          : 'border-white/20 bg-white/[0.04]'
-                    }`}
+                  <div
+                    onClick={() => setModalCreator(creator)}
+                    className="flex items-center gap-3 min-w-0 cursor-pointer flex-1"
                   >
-                    {/* Role Badges */}
-                    <div className="absolute top-1.5 left-1.5 flex gap-1 z-10">
-                      {isCapt && (
-                        <span className="w-5 h-5 rounded-md bg-neon-gold text-black flex items-center justify-center text-[10px] font-black shadow-md">
-                          C
-                        </span>
-                      )}
-                      {isViceCapt && (
-                        <span className="w-5 h-5 rounded-md bg-neon-cyan text-black flex items-center justify-center text-[10px] font-black shadow-md">
-                          VC
-                        </span>
-                      )}
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-slate-950 text-xs shrink-0">
+                      {creator.name.slice(0, 2).toUpperCase()}
                     </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-white truncate">{creator.name}</span>
+                        {isCap && <span className="text-[9px] px-1 bg-amber-400 text-slate-950 font-bold rounded">C</span>}
+                        {isVC && <span className="text-[9px] px-1 bg-purple-400 text-slate-950 font-bold rounded">VC</span>}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-mono">
+                        {creator.category} • {((creator.base_views || 950000) / 1000000).toFixed(1)}M Views
+                      </div>
+                    </div>
+                  </div>
 
-                    {/* Quick remove button */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono text-xs font-black text-amber-300 bg-black/50 px-2 py-1 rounded-lg border border-white/10">
+                      {creator.credit_cost} CR
+                    </span>
                     <button
-                      onClick={(e) => { e.stopPropagation(); toggleCreator(player); }}
-                      className="absolute top-1.5 right-1.5 w-5 h-5 rounded-md bg-black/60 hover:bg-danger text-text-muted hover:text-white flex items-center justify-center text-xs z-10 transition-colors"
+                      type="button"
+                      onClick={() => toggleCreator(creator)}
+                      className={`w-8 h-8 rounded-xl font-black text-xs transition cursor-pointer flex items-center justify-center ${
+                        isSelected
+                          ? 'bg-cyan-400 text-slate-950'
+                          : 'bg-white/10 text-white hover:bg-cyan-500 hover:text-slate-950'
+                      }`}
                     >
-                      <X size={10} />
+                      {isSelected ? '✓' : '+'}
                     </button>
-
-                    {/* Portrait Photo */}
-                    <div
-                      onClick={() => setModalCreator(player)}
-                      className="w-12 h-12 rounded-xl overflow-hidden mt-1 cursor-pointer border border-white/20"
-                    >
-                      <img
-                        src={getPortraitUrl(player)}
-                        alt={player.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-
-                    {/* Info */}
-                    <div className="w-full text-center">
-                      <p className="text-[11px] font-bold text-white truncate px-1">{player.name}</p>
-                      <p className="text-[9px] text-text-muted">{player.category} • {parseFloat(player.credit_cost).toFixed(1)}cr</p>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-
-            {/* Captain & Vice-Captain Selectors */}
-            {selectedCreators.length > 0 && (
-              <div className="relative z-10 p-4 rounded-2xl bg-black/50 border border-white/10 space-y-3 mb-6">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-neon-cyan flex items-center gap-1.5">
-                  <Crown size={14} className="text-neon-gold" />
-                  Assign Captain (2x) & Vice-Captain (1.5x)
-                </p>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] text-text-muted uppercase font-bold block mb-1">👑 Captain (2x)</label>
-                    <select
-                      value={captainId || ''}
-                      onChange={e => {
-                        setCaptainId(e.target.value);
-                        if (e.target.value === viceCaptainId) setViceCaptainId(null);
-                      }}
-                      className="!w-full !py-2 !text-xs !bg-black/60"
-                    >
-                      <option value="">Select Captain</option>
-                      {selectedCreators.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-text-muted uppercase font-bold block mb-1">⭐ Vice-Captain (1.5x)</label>
-                    <select
-                      value={viceCaptainId || ''}
-                      onChange={e => setViceCaptainId(e.target.value)}
-                      className="!w-full !py-2 !text-xs !bg-black/60"
-                    >
-                      <option value="">Select Vice-Capt</option>
-                      {selectedCreators.filter(c => c.id !== captainId).map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Error Display */}
-            {error && (
-              <div className="relative z-10 p-3 rounded-xl bg-danger/15 border border-danger/30 text-xs text-danger mb-4">
-                {error}
-              </div>
-            )}
-
-            {/* Tournament Pass Status Warning */}
-            {!existingTeam && hasActivePass === false && (
-              <div className="relative z-10 p-3 rounded-xl bg-neon-gold/15 border border-neon-gold/40 text-xs mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Crown size={16} className="text-neon-gold shrink-0" />
-                  <div>
-                    <span className="font-bold text-white">Access Pass Required</span>
-                    <span className="text-[10px] block text-white/70">Monthly pass or free referral pass needed to battle</span>
-                  </div>
-                </div>
-                <Link
-                  href={`/subscription?tournamentId=${tournamentId}`}
-                  className="text-[11px] font-bold text-neon-gold underline hover:text-white shrink-0"
-                >
-                  Get Pass →
-                </Link>
-              </div>
-            )}
-
-            {/* Wallet Balance Status Indicator */}
-            {!existingTeam && walletBalance !== null && (
-              <div className={`relative z-10 p-3 rounded-xl border mb-3 flex items-center justify-between text-xs ${
-                walletBalance < 99
-                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                  : 'bg-neon-green/10 border-neon-green/30 text-neon-green'
-              }`}>
-                <div className="flex items-center gap-2">
-                  {walletBalance < 99 ? (
-                    <AlertCircle size={16} className="text-amber-400 shrink-0" />
-                  ) : (
-                    <ShieldCheck size={16} className="text-neon-green shrink-0" />
-                  )}
-                  <div>
-                    <span className="font-bold text-white">Entry Fee: ₹99.00</span>
-                    <span className="text-[10px] block text-white/70">100% Never-Lose Money-Back Guarantee</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="font-mono font-bold block text-white">Bal: ₹{walletBalance.toFixed(2)}</span>
-                  {walletBalance < 99 && (
-                    <Link
-                      href={`/wallet?required=99&tournamentId=${tournamentId}`}
-                      className="text-[10px] text-amber-300 underline font-bold hover:text-white"
-                    >
-                      + Deposit ₹99
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Save Team CTA */}
-            <motion.button
-              whileHover={isReadyToSave ? { scale: 1.02 } : {}}
-              whileTap={isReadyToSave ? { scale: 0.98 } : {}}
-              onClick={handleSave}
-              disabled={!isReadyToSave || saving}
-              className={`relative z-10 w-full py-4 rounded-2xl text-sm font-extrabold flex items-center justify-center gap-2 cursor-pointer transition-all duration-300 ${
-                isReadyToSave
-                  ? walletBalance !== null && walletBalance < 99 && !existingTeam
-                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-black font-black shadow-xl shadow-amber-500/25'
-                    : 'bg-gradient-to-r from-neon-cyan via-blue-500 to-neon-purple text-black font-black shadow-xl shadow-neon-cyan/25'
-                  : 'bg-white/5 text-text-muted cursor-not-allowed border border-white/10'
-              }`}
-            >
-              {saving ? 'Registering Battle Team...' : (
-                <>
-                  {walletBalance !== null && walletBalance < 99 && !existingTeam ? (
-                    <span>Deposit ₹99 & Lock Team</span>
-                  ) : (
-                    <span>{existingTeam ? 'Update Battle Lineup' : 'Lock & Enter Battle Team'}</span>
-                  )}
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </motion.button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* CREATOR PROFILE CARD MODAL */}
-      <AnimatePresence>
-        {modalCreator && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="w-full max-w-lg glass-strong overflow-hidden border border-white/15 relative"
-            >
-              {/* Close Button */}
+      {/* Profile Detail 3D Modal */}
+      {modalCreator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+          <TiltCard3D intensity={8} className="max-w-md w-full p-6 border border-cyan-400/50 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-lg font-black text-white">{modalCreator.name}</h3>
               <button
+                type="button"
                 onClick={() => setModalCreator(null)}
-                className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-black/60 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                className="w-7 h-7 rounded-lg bg-white/10 text-slate-300 hover:text-white font-bold"
               >
-                <X size={16} />
+                ✕
               </button>
-
-              {/* Channel Banner */}
-              <div className="h-32 bg-gradient-to-r from-purple-900 via-indigo-900 to-cyan-900 relative">
-                <div className="absolute inset-0 bg-black/30 backdrop-blur-xs" />
-                <div className="absolute bottom-3 left-6 text-xs text-white/80 font-bold tracking-wider uppercase flex items-center gap-1.5">
-                  <Flame size={14} className="text-neon-gold" />
-                  Official Creator Profile
-                </div>
-              </div>
-
-              {/* Profile Header Details */}
-              <div className="p-6 pt-0 relative">
-                <div className="flex items-end justify-between -mt-12 mb-4">
-                  <div className="w-24 h-24 rounded-2xl overflow-hidden border-3 border-black shadow-2xl relative">
-                    <img
-                      src={getPortraitUrl(modalCreator)}
-                      alt={modalCreator.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    {modalCreator.profile_url && (
-                      <a
-                        href={modalCreator.profile_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-bold text-white flex items-center gap-1.5 transition-colors"
-                      >
-                        <span>Channel</span>
-                        <ExternalLink size={12} />
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mb-6">
-                  <h3 className="text-xl font-black text-white flex items-center gap-2">
-                    {modalCreator.name}
-                    <span className="w-4 h-4 rounded-full bg-neon-cyan/20 text-neon-cyan flex items-center justify-center text-[10px]">✓</span>
-                  </h3>
-                  <p className="text-xs text-text-secondary capitalize">
-                    {modalCreator.platform} Creator • {modalCreator.category} Category
-                  </p>
-                </div>
-
-                {/* Performance & Channel Statistics */}
-                <div className="grid grid-cols-3 gap-3 mb-6">
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                    <p className="text-[10px] text-text-muted font-bold uppercase">Followers</p>
-                    <p className="text-base font-black text-neon-cyan">
-                      {(modalCreator.base_followers || 0).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                    <p className="text-[10px] text-text-muted font-bold uppercase">Total Views</p>
-                    <p className="text-base font-black text-neon-gold">
-                      {(modalCreator.base_views || 0).toLocaleString()}
-                    </p>
-                  </div>
-
-                  <div className="p-3 rounded-xl bg-white/[0.03] border border-white/5 text-center">
-                    <p className="text-[10px] text-text-muted font-bold uppercase">Selection %</p>
-                    <p className="text-base font-black text-success">
-                      78.4%
-                    </p>
-                  </div>
-                </div>
-
-                {/* Fantasy Performance Breakdown */}
-                <div className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-2 mb-6">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-text-muted">Fantasy Credit Cost:</span>
-                    <span className="font-extrabold text-neon-gold">{modalCreator.credit_cost} Credits</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-text-muted">Avg Fantasy Points (Last 5):</span>
-                    <span className="font-extrabold text-neon-cyan">142.8 Pts</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-text-muted">Scoring Multiplier Role:</span>
-                    <span className="font-extrabold text-text-primary">Eligible for 2x Captain / 1.5x VC</span>
-                  </div>
-                </div>
-
-                {/* Direct Action */}
-                <button
-                  onClick={() => {
-                    toggleCreator(modalCreator);
-                    setModalCreator(null);
-                  }}
-                  className={`w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                    selected.has(modalCreator.id)
-                      ? 'bg-danger/20 text-danger border border-danger/30 hover:bg-danger/30'
-                      : 'bg-neon-cyan text-black hover:bg-neon-cyan/90 shadow-lg shadow-neon-cyan/20'
-                  }`}
-                >
-                  {selected.has(modalCreator.id) ? (
-                    <>
-                      <X size={16} />
-                      <span>Remove from Current Lineup</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check size={16} />
-                      <span>Add to Battle Lineup</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-      {/* Sticky Mobile Floating Team Action Bar (Dream11 APK Style) */}
-      {mobileTab === 'roster' && (
-        <div className="lg:hidden fixed bottom-18 left-3 right-3 z-40">
-          <div className="glass-strong p-3 rounded-2xl border border-neon-cyan/30 shadow-[0_10px_35px_rgba(0,0,0,0.8)] flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black text-white flex items-center gap-1.5">
-                <Users size={14} className="text-neon-cyan" />
-                <span>{selected.size} / {totalRequired} Creators</span>
-              </p>
-              <p className="text-[10px] text-neon-gold font-bold">
-                {(maxCredits - creditsUsed).toFixed(1)} Credits Left
-              </p>
             </div>
-
+            <div className="grid grid-cols-2 gap-3 text-center">
+              <div className="p-3 rounded-xl bg-black/50 border border-white/10">
+                <div className="text-[10px] text-slate-400 uppercase">Category</div>
+                <div className="text-sm font-bold text-white mt-0.5">{modalCreator.category}</div>
+              </div>
+              <div className="p-3 rounded-xl bg-black/50 border border-white/10">
+                <div className="text-[10px] text-slate-400 uppercase">Credit Cost</div>
+                <div className="text-sm font-bold text-amber-300 mt-0.5">{modalCreator.credit_cost} CR</div>
+              </div>
+            </div>
             <button
-              onClick={() => setMobileTab('studio')}
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-neon-purple to-neon-cyan text-white text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-neon-purple/30 cursor-pointer"
+              type="button"
+              onClick={() => {
+                toggleCreator(modalCreator);
+                setModalCreator(null);
+              }}
+              className="w-full py-2.5 rounded-xl font-extrabold text-xs bg-gradient-to-r from-purple-600 to-cyan-500 text-white"
             >
-              <span>{isReadyToSave ? 'Assign C/VC & Save' : 'View Stage'}</span>
-              <ArrowRight size={14} />
+              {selected.has(modalCreator.id) ? 'Remove from Squad' : 'Draft to 3D Lineup'}
             </button>
-          </div>
+          </TiltCard3D>
         </div>
       )}
     </div>

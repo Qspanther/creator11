@@ -1,147 +1,198 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '../lib/auth-context';
-import { apiGet } from '../lib/api';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Video, Trophy, Users, TrendingUp, Wallet, Flame, ArrowRight, Sparkles, Shield, Zap } from 'lucide-react';
+import { apiGet } from '../lib/api';
+import { useAuth } from '../lib/auth-context';
+import TiltCard3D from '../components/ui/TiltCard3D';
+import { playSpatialSFX } from '../components/ui/StageControls3D';
+import { Trophy, Users, TrendingUp, Wallet, Sparkles, ArrowRight, Video, ShieldCheck, Flame } from 'lucide-react';
 
-export default function DashboardPage() {
+export default function DashboardPage3D() {
   const { user, token } = useAuth();
-  const [balance, setBalance] = useState(0);
-  const [stats, setStats] = useState({ totalTeams: 0, activeTournaments: 0 });
+  const [balance, setBalance] = useState<number>(0);
+  const [teamsCount, setTeamsCount] = useState<number>(0);
+  const [liveTournaments, setLiveTournaments] = useState<any[]>([]);
 
   useEffect(() => {
-    if (token) {
-      apiGet('/wallet/balance', token).then(d => setBalance(d.balance)).catch(() => {});
-      apiGet('/teams', token).then(d => setStats(prev => ({ ...prev, totalTeams: d.length }))).catch(() => {});
-    }
+    if (!token) return;
+    apiGet('/wallet/balance', token)
+      .then((res) => {
+        if (typeof res?.balance === 'number') setBalance(res.balance);
+        else if (res?.balance) setBalance(parseFloat(res.balance));
+      })
+      .catch(() => {});
+
+    apiGet('/teams', token)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.teams;
+        if (Array.isArray(list)) setTeamsCount(list.length);
+      })
+      .catch(() => {});
+
+    apiGet('/tournaments', token)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.tournaments;
+        if (Array.isArray(list)) setLiveTournaments(list.slice(0, 3));
+      })
+      .catch(() => {});
   }, [token]);
 
-  const departments = [
-    {
-      platform: 'youtube',
-      title: 'YouTube Creator League',
-      icon: Video,
-      color: 'from-red-600 to-red-500',
-      glowColor: 'rgba(239, 68, 68, 0.2)',
-      description: 'Compete with 25 verified YouTube icons across Gaming, Tech, Vlogging, Comedy & Lifestyle.',
-      creators: '25 Creators',
-      activeCount: 'Active Battles',
-    },
-  ];
-
   return (
-    <div className="max-w-6xl mx-auto py-2">
-      {/* ★★★ NEVER LOSE — CREATOR ENTERTAINMENT LEAGUE HERO BANNER ★★★ */}
-      <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-3xl p-6 sm:p-10 mb-8 border border-neon-gold/40 bg-gradient-to-br from-[#1b1030] via-[#0e0e18] to-[#091522] shadow-[0_0_60px_rgba(251,191,36,0.18)]"
-      >
-        {/* Ambient Lighting Orbs */}
-        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-neon-gold/20 blur-[90px] pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-neon-purple/25 blur-[90px] pointer-events-none" />
-        <div className="absolute inset-0 bg-[radial-gradient(#ffffff08_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col items-center text-center">
-          {/* League Pill */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-neon-gold/15 border border-neon-gold/40 text-neon-gold text-[10px] font-black uppercase tracking-widest mb-3 shadow-md">
-            <Sparkles size={12} className="text-neon-gold" />
-            <span>Creator Entertainment League</span>
+    <div className="px-4 sm:px-8 py-8 max-w-7xl mx-auto w-full space-y-8">
+      {/* 3D NEVER LOSE Hero Stage Banner */}
+      <TiltCard3D intensity={10} className="p-8 sm:p-10 border border-amber-400/40 relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/35 text-amber-300 text-xs font-black uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Creator Entertainment League • 3D Holographic Arena</span>
+            </div>
+            <h1 className="text-4xl sm:text-6xl font-black uppercase tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-amber-200 to-amber-400">
+              NEVER LOSE
+            </h1>
+            <p className="text-sm sm:text-base text-slate-300 max-w-xl leading-relaxed">
+              Welcome back, <strong className="text-white">{user?.name || 'Creator'}</strong>. Draft your 11 verified YouTube creators, monitor live metric surges, and earn top-tier prize payouts.
+            </p>
+            <div className="flex items-center gap-3 text-xs text-emerald-400 font-semibold pt-1">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Smart Prize Pool Algorithm Active • Guaranteed Returns for Top 1,000</span>
+            </div>
           </div>
 
-          {/* Massive NEVER LOSE Title */}
-          <h1 className="text-5xl sm:text-7xl md:text-8xl font-black uppercase tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-white via-amber-200 to-neon-gold drop-shadow-[0_12px_35px_rgba(250,204,21,0.45)] leading-none my-1 font-mono select-none">
-            NEVER LOSE
-          </h1>
-
-          <p className="text-base sm:text-xl font-bold text-white max-w-xl mt-2 tracking-tight">
-            Where Content Creators Become Your Champions
-          </p>
-          <p className="text-xs sm:text-sm text-text-secondary max-w-lg mx-auto mt-1 leading-relaxed">
-            Welcome, <strong>{user?.name}</strong>. Draft the biggest icons, track live delta points, and rise to the Top 100 leaderboard.
-          </p>
-
-          {/* Quick Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
-            <Link href="/tournaments">
-              <motion.button
-                whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(251, 191, 36, 0.4)' }}
-                whileTap={{ scale: 0.95 }}
-                className="px-6 py-3 text-xs sm:text-sm font-black bg-gradient-to-r from-neon-gold via-amber-400 to-yellow-500 text-black rounded-xl flex items-center gap-2 shadow-lg shadow-neon-gold/20 cursor-pointer"
-              >
-                <Trophy size={16} /> Enter Battle League <ArrowRight size={16} />
-              </motion.button>
+          <div className="flex flex-wrap md:flex-col gap-3 shrink-0">
+            <Link
+              href="/tournaments"
+              onClick={() => playSpatialSFX('power')}
+              className="px-6 py-3 rounded-2xl font-black text-sm bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 text-slate-950 shadow-xl shadow-amber-500/25 hover:scale-105 transition flex items-center gap-2"
+            >
+              <Trophy className="w-4 h-4" /> Enter 3D Tournament <ArrowRight className="w-4 h-4" />
             </Link>
-            <Link href="/creators">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="px-5 py-3 text-xs sm:text-sm font-bold bg-white/[0.05] hover:bg-white/[0.1] text-white rounded-xl border border-white/15 flex items-center gap-2 cursor-pointer transition-all"
-              >
-                <Users size={16} className="text-neon-cyan" /> Scout Creators
-              </motion.button>
+            <Link
+              href="/creators"
+              onClick={() => playSpatialSFX('click')}
+              className="px-6 py-3 rounded-2xl font-bold text-sm bg-white/10 border border-white/20 text-cyan-200 hover:bg-white/15 transition flex items-center gap-2"
+            >
+              <Users className="w-4 h-4 text-cyan-400" /> Scout 50 Creators
             </Link>
           </div>
         </div>
-      </motion.div>
+      </TiltCard3D>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
-        {[
-          { label: 'Wallet Balance', value: `₹${balance.toLocaleString('en-IN')}`, icon: Wallet, color: 'text-neon-gold' },
-          { label: 'Your Active Teams', value: stats.totalTeams.toString(), icon: Users, color: 'text-neon-purple' },
-          { label: 'League Competitors', value: '300+ Active', icon: TrendingUp, color: 'text-neon-cyan' },
-        ].map((s, i) => (
-          <motion.div
-            key={s.label}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
-            className="glass-card p-5 rounded-2xl border border-white/10 flex items-center gap-4"
-          >
-            <div className={`w-11 h-11 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-center ${s.color}`}>
-              <s.icon size={22} />
-            </div>
-            <div>
-              <p className="text-[10px] text-text-muted uppercase tracking-wider font-bold">{s.label}</p>
-              <p className="text-xl font-black text-white">{s.value}</p>
-            </div>
-          </motion.div>
-        ))}
+      {/* 3D Telemetry Grid */}
+      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <TiltCard3D className="p-5 border border-emerald-400/30">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400 uppercase font-bold">Total Wallet</span>
+            <Wallet className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="text-2xl font-black text-emerald-300 font-mono mt-1">
+            ₹{Number(balance).toLocaleString('en-IN')}
+          </div>
+          <div className="text-[11px] text-emerald-400/80 mt-2 flex items-center gap-1">
+            <span>●</span> Verified INR Balance
+          </div>
+        </TiltCard3D>
+
+        <TiltCard3D className="p-5 border border-cyan-400/30">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400 uppercase font-bold">My Active Squads</span>
+            <Trophy className="w-4 h-4 text-cyan-400" />
+          </div>
+          <div className="text-2xl font-black text-cyan-300 font-mono mt-1">
+            {teamsCount} Teams
+          </div>
+          <div className="text-[11px] text-cyan-400/80 mt-2 flex items-center gap-1">
+            <span>●</span> Competing in Live Creator Cups
+          </div>
+        </TiltCard3D>
+
+        <TiltCard3D className="p-5 border border-purple-400/30">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400 uppercase font-bold">Bot Competitors</span>
+            <TrendingUp className="w-4 h-4 text-purple-400" />
+          </div>
+          <div className="text-2xl font-black text-purple-300 font-mono mt-1">
+            1,100 Bots Active
+          </div>
+          <div className="text-[11px] text-purple-400/80 mt-2 flex items-center gap-1">
+            <span>●</span> Automated pre-match & ranking rearrange
+          </div>
+        </TiltCard3D>
+
+        <TiltCard3D className="p-5 border border-amber-400/30">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-400 uppercase font-bold">Scoring Engine</span>
+            <Flame className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-2xl font-black text-amber-300 font-mono mt-1">
+            2.0x Captains
+          </div>
+          <div className="text-[11px] text-amber-400/80 mt-2 flex items-center gap-1">
+            <span>●</span> Real-time delta tracking synced
+          </div>
+        </TiltCard3D>
       </div>
 
-      {/* Department Cards */}
-      <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-white">
-        <Trophy size={20} className="text-neon-gold" /> Active Battle Divisions
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-1 max-w-2xl gap-6">
-        {departments.map((dept, i) => (
-          <Link key={dept.platform} href={`/platform/${dept.platform}`}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 + i * 0.15 }}
-              whileHover={{ y: -6, boxShadow: `0 0 40px ${dept.glowColor}` }}
-              className="glass-card p-8 rounded-3xl border border-white/10 cursor-pointer group hover:border-red-500/40 transition-all"
-            >
-              <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${dept.color} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform shadow-lg shadow-red-500/20`}>
-                <dept.icon size={28} className="text-white" />
+      {/* Featured Battle Division (YouTube Active) */}
+      <div className="space-y-4">
+        <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2 text-white">
+          <Video className="w-6 h-6 text-red-500" /> Active Battle Division
+        </h2>
+        <div className="grid md:grid-cols-2 gap-6">
+          <TiltCard3D className="p-6 border border-red-500/40 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-red-600 to-red-500 flex items-center justify-center shadow-lg shadow-red-500/30">
+                <Video className="w-6 h-6 text-white" />
               </div>
-              <h3 className="text-2xl font-black mb-2 text-white">{dept.title}</h3>
-              <p className="text-sm text-text-secondary mb-4">{dept.description}</p>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-text-muted glass px-3 py-1 rounded-full border border-white/5">{dept.creators}</span>
-                <span className="text-xs text-success glass px-3 py-1 rounded-full border border-success/20 flex items-center gap-1.5 font-bold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-success animate-ping" />
-                  Live Battles In Progress
-                </span>
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                Live Battles Active
+              </span>
+            </div>
+            <div>
+              <h3 className="text-2xl font-black text-white">YouTube Creator League</h3>
+              <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                Draft 11 verified YouTube creators across Gaming, Vlogging, Comedy, Tech, and Lifestyle with live video view delta scoring.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-cyan-300 font-bold">25 Seeded YouTube Stars</span>
+              <Link
+                href="/tournaments"
+                className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-500 to-purple-600 text-white hover:opacity-90 transition"
+              >
+                Join League →
+              </Link>
+            </div>
+          </TiltCard3D>
+
+          <TiltCard3D className="p-6 border border-cyan-400/30 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/30">
+                <Trophy className="w-6 h-6 text-white" />
               </div>
-            </motion.div>
-          </Link>
-        ))}
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                Top 1,000 Slabs
+              </span>
+            </div>
+            <div>
+              <h3 className="text-2xl font-black text-white">Prize Pool Distribution</h3>
+              <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                Custom 1st Prize, 50% 2nd, 25% 3rd, 10% 4th, 7% 5th, 4% (6-10), 2% (11-100), scaling to ₹100 for rank 1000 with ₹97 guaranteed return.
+              </p>
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-xs text-amber-300 font-bold">₹97 Refund + ₹2 Fee Protection</span>
+              <Link
+                href="/my-teams"
+                className="px-4 py-2 rounded-xl text-xs font-black bg-white/10 border border-white/20 text-slate-200 hover:bg-white/20 transition"
+              >
+                My Standings →
+              </Link>
+            </div>
+          </TiltCard3D>
+        </div>
       </div>
     </div>
   );

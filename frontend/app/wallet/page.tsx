@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../lib/auth-context';
 import { apiGet, apiPost } from '../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import TiltCard3D from '../components/ui/TiltCard3D';
 import {
   Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft,
   Trophy, ShieldCheck, History, CheckCircle, Copy, Check,
@@ -305,7 +306,7 @@ export default function WalletPage() {
       <motion.div
         initial={{ opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="relative overflow-hidden rounded-3xl p-6 sm:p-8 mb-8 border border-emerald-500/30 bg-gradient-to-br from-[#0c2016] via-[#091512] to-[#070b12] shadow-[0_0_50px_rgba(16,185,129,0.15)]"
+        className="holo-card relative overflow-hidden rounded-3xl p-6 sm:p-8 mb-8 border border-emerald-500/35 shadow-[0_0_50px_rgba(16,185,129,0.15)]"
       >
         <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-emerald-500/20 blur-[80px] pointer-events-none" />
         <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full bg-cyan-500/15 blur-[80px] pointer-events-none" />

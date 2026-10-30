@@ -1,7 +1,11 @@
 @import "tailwindcss";
 
+:root {
+  --pitch-angle: 22deg;
+}
+
 @theme inline {
-  --color-obsidian: #09090d;
+  --color-obsidian: #06060b;
   --color-obsidian-card: #0f0f15;
   --color-obsidian-light: #15151f;
   --color-obsidian-lighter: #1e1e2d;
@@ -293,4 +297,110 @@ button, [role="button"], a {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* ─── 3D Spatial Perspective & Holographic Utilities ─── */
+.perspective-stage {
+  perspective: 1300px;
+}
+
+.perspective-1400 {
+  perspective: 1400px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.depth-layer-10 {
+  transform: translateZ(12px);
+}
+
+.depth-layer-20 {
+  transform: translateZ(24px);
+}
+
+.depth-layer-30 {
+  transform: translateZ(36px);
+}
+
+/* 3D Holographic Card Surface */
+.holo-card {
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    rgba(24, 24, 42, 0.82) 0%,
+    rgba(11, 11, 22, 0.90) 60%,
+    rgba(36, 18, 60, 0.78) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow:
+    0 20px 45px -15px rgba(0, 0, 0, 0.85),
+    0 0 24px rgba(168, 85, 247, 0.14),
+    inset 0 1px 1px rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transform-style: preserve-3d;
+  transition: transform 0.12s ease-out, border-color 0.25s ease, box-shadow 0.25s ease;
+  will-change: transform;
+}
+
+.holo-card:hover {
+  border-color: rgba(0, 240, 255, 0.48);
+  box-shadow:
+    0 28px 60px -12px rgba(0, 240, 255, 0.22),
+    0 0 36px rgba(168, 85, 247, 0.32),
+    inset 0 1px 2px rgba(0, 240, 255, 0.35);
+}
+
+/* 3D Holographic Stadium Pitch in Team Builder */
+.stadium-pitch-wrapper {
+  perspective: 1400px;
+}
+
+.stadium-pitch-surface {
+  transform: rotateX(var(--pitch-angle, 22deg));
+  transform-style: preserve-3d;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  background:
+    radial-gradient(ellipse at 50% 50%, rgba(0, 240, 255, 0.16) 0%, rgba(168, 85, 247, 0.12) 45%, rgba(8, 8, 18, 0.95) 85%),
+    repeating-linear-gradient(0deg, rgba(0, 240, 255, 0.06) 0px, rgba(0, 240, 255, 0.06) 1px, transparent 1px, transparent 36px),
+    repeating-linear-gradient(90deg, rgba(168, 85, 247, 0.06) 0px, rgba(168, 85, 247, 0.06) 1px, transparent 1px, transparent 36px);
+  border: 2px solid rgba(0, 240, 255, 0.38);
+  box-shadow:
+    0 40px 90px -10px rgba(168, 85, 247, 0.42),
+    0 0 50px rgba(0, 240, 255, 0.24),
+    inset 0 0 70px rgba(168, 85, 247, 0.22);
+}
+
+.pedestal-slot {
+  transform: translateZ(26px);
+  transform-style: preserve-3d;
+  transition: all 0.25s ease;
+}
+
+.pedestal-slot:hover {
+  transform: translateZ(48px) scale(1.06);
+}
+
+.pedestal-ring {
+  box-shadow:
+    0 0 22px rgba(0, 240, 255, 0.55),
+    inset 0 0 14px rgba(168, 85, 247, 0.65);
+}
+
+@keyframes float3D {
+  0%, 100% { transform: translateY(0px) rotateX(2deg) rotateY(-2deg); }
+  50% { transform: translateY(-10px) rotateX(-2deg) rotateY(3deg); }
+}
+
+.animate-float-3d {
+  animation: float3D 5.5s ease-in-out infinite;
+}
+
+.nav-btn-active {
+  background: linear-gradient(90deg, rgba(168, 85, 247, 0.28), rgba(0, 240, 255, 0.18));
+  border-color: rgba(0, 240, 255, 0.55);
+  color: #ffffff;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
 }

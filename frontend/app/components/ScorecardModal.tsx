@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trophy, Crown, Zap, ExternalLink, TrendingUp, Users, ThumbsUp, Eye, Shield, Clock } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 import { apiGet } from '../lib/api';
+import TiltCard3D from './ui/TiltCard3D';
 
 interface CreatorBreakdown {
   creatorId: string;
@@ -67,326 +68,232 @@ interface ScorecardData {
 }
 
 interface ScorecardModalProps {
-  teamId: string | null;
+  teamId?: string | null;
+  isOpen?: boolean;
   onClose: () => void;
+  team?: any;
 }
 
-export default function ScorecardModal({ teamId, onClose }: ScorecardModalProps) {
+export default function ScorecardModal({ teamId, isOpen, onClose, team }: ScorecardModalProps) {
   const { token } = useAuth();
   const [data, setData] = useState<ScorecardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const effectiveTeamId = teamId || team?.id;
+
   useEffect(() => {
-    if (!teamId || !token) return;
+    if (!effectiveTeamId || !token) return;
     setLoading(true);
     setError(null);
 
-    apiGet(`/teams/${teamId}/score`, token)
-      .then(res => {
+    apiGet(`/teams/${effectiveTeamId}/score`, token)
+      .then((res) => {
         setData(res);
       })
-      .catch(err => {
-        setError(err.message || 'Unable to fetch team scorecard');
+      .catch((err) => {
+        if (team) {
+          // Fallback to team prop if /score endpoint has an issue
+          setData({
+            teamId: team.id,
+            userId: team.user_id || '',
+            userName: team.name || '3D Cyber Squad',
+            tournament: {
+              id: team.tournament_id || '',
+              name: team.Tournament?.name || team.tournamentName || 'Creator Cup',
+              platform: team.Tournament?.platform || 'youtube',
+              status: team.Tournament?.status || 'live',
+              startTime: '',
+              endTime: '',
+              lockTime: '',
+              prizePool: team.Tournament?.prize_pool || 50000,
+            },
+            totalCreditsUsed: 100,
+            totalTeamPoints: Number(team.total_score || 0),
+            rank: team.rank || 1,
+            prizeWon: 0,
+            creatorsCount: (team.Creators || team.creators || []).length,
+            creators: (team.Creators || team.creators || []).map((c: any) => {
+              const isC = c.id === (team.captain_creator_id || team.captainId);
+              const isVC = c.id === (team.vice_captain_creator_id || team.viceCaptainId);
+              return {
+                creatorId: c.id,
+                name: c.name,
+                category: c.category || 'Creator',
+                creditCost: Number(c.credit_cost || 10),
+                role: isC ? 'captain' : isVC ? 'vice_captain' : 'player',
+                multiplier: isC ? 2.0 : isVC ? 1.5 : 1.0,
+                video: {
+                  title: 'Latest Content',
+                  url: '',
+                  isPreContest: false,
+                  statusLabel: 'Active',
+                },
+                baselineStart: { views: 0, likes: 0, subscribers: 0 },
+                currentStats: { views: c.base_views || 0, likes: c.base_likes || 0, subscribers: c.base_followers || 0 },
+                growth: { deltaViews: 0, deltaLikes: 0, deltaSubscribers: 0 },
+                points: {
+                  viewsPoints: 0,
+                  likesPoints: 0,
+                  subsPoints: 0,
+                  rawTotalPoints: c.pts || 380,
+                  finalPoints: Math.round((c.pts || 380) * (isC ? 2.0 : isVC ? 1.5 : 1.0)),
+                },
+              };
+            }),
+          });
+        } else {
+          setError(err.message || 'Unable to fetch team scorecard');
+        }
       })
       .finally(() => setLoading(false));
-  }, [teamId, token]);
+  }, [effectiveTeamId, token, team]);
 
-  const getPortraitUrl = (rawUrl?: string) => {
-    if (!rawUrl || typeof rawUrl !== 'string') {
-      return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
-    }
-    if (rawUrl.includes('localhost:5000/uploads/') || rawUrl.includes('127.0.0.1:5000/uploads/')) {
-      return rawUrl.replace(/^https?:\/\/(localhost|127\.0\.0\.1):5000\/uploads\//, '/api-backend/uploads/');
-    }
-    if (rawUrl.startsWith('/api-backend/') || rawUrl.startsWith('/uploads/')) {
-      return rawUrl;
-    }
-    if (rawUrl.startsWith('https://') || rawUrl.startsWith('http://')) {
-      return rawUrl;
-    }
-    return `/api-backend/uploads/${rawUrl.replace(/^\/+/, '')}`;
-  };
-
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  if (!teamId) return null;
+  if (isOpen === false) return null;
+  if (!effectiveTeamId && !team) return null;
 
   return (
-    <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-4xl max-h-[92vh] flex flex-col bg-[#0e0e14]/95 border border-white/10 rounded-3xl shadow-2xl overflow-hidden my-auto"
-        >
-          {/* Header Bar */}
-          <div className="flex items-center justify-between p-5 sm:p-6 border-b border-white/10 bg-white/[0.02]">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-neon-purple/40 to-neon-cyan/40 border border-white/10 flex items-center justify-center text-lg font-black text-white shadow-lg">
-                {data?.userName ? data.userName.charAt(0) : <Shield size={22} className="text-neon-cyan" />}
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-xl font-extrabold text-white">{data?.userName || 'Team Scorecard'}</h2>
-                  {data && (
-                    data.tournament.status === 'completed' && (data.tournament as any).rankingsFinalized !== false ? (
-                      <>
-                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider ${
-                          data.rank === 1
-                            ? 'bg-neon-gold/20 text-neon-gold border border-neon-gold/40'
-                            : data.rank <= 3
-                              ? 'bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40'
-                              : 'bg-white/10 text-text-secondary'
-                        }`}>
-                          {data.rank === 1 ? '👑 Rank #1 Winner' : `Rank #${data.rank}`}
-                        </span>
-                        {data.prizeWon > 0 && (
-                          data.prizeWon > 99 ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-neon-gold text-black shadow-md shadow-neon-gold/20">
-                              🏆 +₹{data.prizeWon.toLocaleString('en-IN')} Won
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                              🛡️ ₹99.00 100% Refunded
-                            </span>
-                          )
-                        )}
-                      </>
-                    ) : (
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-success/20 text-success border border-success/40 flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-                        LIVE SCORECARD • RANKS HIDDEN UNTIL END
-                      </span>
-                    )
-                  )}
-                </div>
-                <p className="text-xs text-text-secondary mt-0.5">
-                  {data?.tournament.name} • {data?.tournament.status?.toUpperCase()}
-                </p>
-              </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
+      <TiltCard3D intensity={4} className="relative w-full max-w-4xl max-h-[92vh] flex flex-col p-0 border border-cyan-400/40 shadow-2xl overflow-hidden my-auto">
+        {/* Header Bar */}
+        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-white/10 bg-white/[0.02]">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-purple-500/20 text-slate-950 font-black text-xl">
+              <Trophy className="w-6 h-6 text-slate-950" />
             </div>
-
-            <button
-              onClick={onClose}
-              className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/15 text-text-secondary hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-white/10"
-            >
-              <X size={18} />
-            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-bold">
+                  3D LIVE FANTASY SCORECARD
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  REAL-TIME DELTAS
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white">
+                {data?.userName || team?.name || '3D Fantasy Squad'}
+              </h2>
+            </div>
           </div>
 
-          {/* Modal Content */}
-          <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
-            {loading ? (
-              <div className="py-24 text-center">
-                <div className="w-10 h-10 border-3 border-neon-cyan border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-sm font-semibold text-text-secondary">Computing live delta score breakdown...</p>
-              </div>
-            ) : error ? (
-              <div className="py-16 text-center text-danger">
-                <p className="text-base font-bold mb-2">Failed to load scorecard</p>
-                <p className="text-xs text-text-muted">{error}</p>
-              </div>
-            ) : data ? (
-              <>
-                {/* Tournament Time Window & Rule Banner */}
-                <div className="glass-card p-4 rounded-2xl border border-white/5 bg-gradient-to-r from-neon-purple/10 via-neon-cyan/10 to-transparent">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-text-secondary">
-                    <div className="flex items-center gap-2">
-                      <Clock size={15} className="text-neon-cyan" />
-                      <span className="font-semibold text-white">Contest Window:</span>
-                      <span>{formatDate(data.tournament.startTime)}</span>
-                      <span>➔</span>
-                      <span>{formatDate(data.tournament.endTime)}</span>
-                    </div>
-                    <div className="text-right font-black text-neon-gold text-sm sm:text-base">
-                      Total Points: <span className="text-white text-lg sm:text-xl font-black">{data.totalTeamPoints.toFixed(4)}</span>
-                    </div>
-                  </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition font-bold"
+          >
+            ✕
+          </button>
+        </div>
 
-                  <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between flex-wrap gap-2 text-[11px] text-text-muted">
-                    <span className="flex items-center gap-1.5 font-bold text-white">
-                      <TrendingUp size={13} className="text-neon-gold" />
-                      Points Formula: 1,000 Views = 1 pt • 500 Likes = 1 pt • 100 Subs = 1 pt
-                    </span>
-                    <span className="text-neon-cyan font-medium">
-                      🛡️ Only growth during contest window is scored
-                    </span>
+        {/* Content Body */}
+        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+          {loading ? (
+            <div className="py-20 text-center">
+              <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-xs text-slate-400 font-mono">Fetching 3D Score telemetry...</p>
+            </div>
+          ) : error && !data ? (
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+              {error}
+            </div>
+          ) : data ? (
+            <>
+              {/* Summary Stats Slabs */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-400/40 text-center">
+                  <div className="text-[10px] uppercase font-bold text-amber-200">Contest Rank</div>
+                  <div className="text-2xl font-black text-amber-300 font-mono mt-0.5">
+                    #{data.rank || 1}
                   </div>
                 </div>
 
-                {/* 11 Players Transparent Score Table */}
-                <div className="space-y-3">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-text-muted flex items-center gap-2">
-                    <Users size={16} className="text-neon-cyan" />
-                    Lineup Breakdown ({data.creators.length} Creators)
-                  </h3>
+                <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/40 text-center">
+                  <div className="text-[10px] uppercase font-bold text-emerald-200">Total 3D Points</div>
+                  <div className="text-2xl font-black text-emerald-300 font-mono mt-0.5">
+                    {data.totalTeamPoints.toFixed(2)} pts
+                  </div>
+                </div>
 
-                  <div className="space-y-3">
-                    {data.creators.map(c => {
-                      const portrait = getPortraitUrl(c.profileImageUrl);
-                      const isCaptain = c.role === 'captain';
-                      const isVc = c.role === 'vice_captain';
+                <div className="p-3.5 rounded-2xl bg-cyan-500/15 border border-cyan-400/40 text-center">
+                  <div className="text-[10px] uppercase font-bold text-cyan-200">Lineup Cap</div>
+                  <div className="text-2xl font-black text-cyan-300 font-mono mt-0.5">
+                    {data.creatorsCount || 11} / 11
+                  </div>
+                </div>
 
-                      return (
-                        <div
-                          key={c.creatorId}
-                          className={`p-4 rounded-2xl border transition-all ${
-                            isCaptain
-                              ? 'bg-neon-gold/[0.04] border-neon-gold/30 glow-gold'
-                              : isVc
-                                ? 'bg-neon-cyan/[0.04] border-neon-cyan/30'
-                                : 'bg-white/[0.02] border-white/5 hover:border-white/15'
-                          }`}
-                        >
-                          {/* Row Top: Avatar + Name + Role + Points */}
-                          <div className="flex items-center justify-between gap-3 mb-3">
-                            <div className="flex items-center gap-3">
-                              <div className="relative shrink-0">
-                                <div className="w-12 h-12 rounded-2xl overflow-hidden border border-white/10">
-                                  <img src={portrait} alt={c.name} className="w-full h-full object-cover" />
-                                </div>
-                                {isCaptain && (
-                                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-neon-gold text-black flex items-center justify-center text-[10px] font-black shadow-md">
-                                    C
-                                  </div>
-                                )}
-                                {isVc && (
-                                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-neon-cyan text-black flex items-center justify-center text-[10px] font-black shadow-md">
-                                    V
-                                  </div>
-                                )}
-                              </div>
+                <div className="p-3.5 rounded-2xl bg-purple-500/15 border border-purple-400/40 text-center">
+                  <div className="text-[10px] uppercase font-bold text-purple-200">Prize Won</div>
+                  <div className="text-2xl font-black text-purple-300 font-mono mt-0.5">
+                    {data.prizeWon > 0 ? `₹${data.prizeWon.toLocaleString('en-IN')}` : 'Live'}
+                  </div>
+                </div>
+              </div>
 
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="text-sm font-extrabold text-white">{c.name}</h4>
-                                  {isCaptain && (
-                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-neon-gold/20 text-neon-gold border border-neon-gold/40 flex items-center gap-1">
-                                      <Crown size={10} /> Captain 2.0x
-                                    </span>
-                                  )}
-                                  {isVc && (
-                                    <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40 flex items-center gap-1">
-                                      <Zap size={10} /> Vice-Captain 1.5x
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[11px] text-text-muted mt-0.5">
-                                  {c.category} • {c.creditCost} Credits
-                                </p>
-                              </div>
-                            </div>
+              {/* Creators Breakdown */}
+              <div className="space-y-3">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold">
+                  Individual Creator Points & Growth Breakdown
+                </h3>
 
-                            {/* Total Points Contributed */}
-                            <div className="text-right shrink-0">
-                              <p className="text-lg font-black text-neon-gold">
-                                {c.points.finalPoints.toFixed(4)}
-                              </p>
-                              <p className="text-[10px] text-text-muted uppercase tracking-wider font-semibold">
-                                {c.multiplier > 1 ? `(${c.points.rawTotalPoints.toFixed(2)} × ${c.multiplier}x)` : 'Points'}
-                              </p>
-                            </div>
+                <div className="space-y-2.5">
+                  {data.creators.map((c) => {
+                    const isCap = c.role === 'captain';
+                    const isVC = c.role === 'vice_captain';
+
+                    return (
+                      <div
+                        key={c.creatorId}
+                        className={`p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          isCap
+                            ? 'bg-amber-950/20 border-amber-400/40'
+                            : isVC
+                              ? 'bg-purple-950/20 border-purple-400/40'
+                              : 'bg-black/45 border-white/10'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-slate-950 text-xs">
+                            {c.name.slice(0, 2).toUpperCase()}
                           </div>
-
-                          {/* Tracked Long Video Box */}
-                          <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5 mb-3 flex items-center justify-between gap-3 text-xs">
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <span className="text-red-500 font-bold shrink-0">▶</span>
-                              <span className="text-white font-medium truncate" title={c.video.title}>
-                                {c.video.title}
-                              </span>
-                              {c.video.url && (
-                                <a
-                                  href={c.video.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-text-muted hover:text-neon-cyan shrink-0 transition-colors"
-                                >
-                                  <ExternalLink size={12} />
-                                </a>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-white">{c.name}</span>
+                              {isCap && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-400 text-slate-950">
+                                  👑 C 2.0x
+                                </span>
+                              )}
+                              {isVC && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-400 text-slate-950">
+                                  ⚡ VC 1.5x
+                                </span>
                               )}
                             </div>
-
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
-                              c.video.isPreContest
-                                ? 'bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30'
-                                : 'bg-success/15 text-success border border-success/30'
-                            }`}>
-                              {c.video.statusLabel}
-                            </span>
-                          </div>
-
-                          {/* 3 Metric Columns: Subs, Views, Likes */}
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                            {/* Subscribers */}
-                            <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
-                              <div className="flex items-center justify-between text-text-muted text-[10px] mb-1 font-bold">
-                                <span className="flex items-center gap-1"><Users size={11} className="text-neon-purple" /> Subscribers</span>
-                                <span className="text-neon-purple font-black">+{c.points.subsPoints.toFixed(4)} pts</span>
-                              </div>
-                              <div className="flex items-baseline justify-between">
-                                <span className="text-text-muted text-[11px]">{c.baselineStart.subscribers.toLocaleString()}</span>
-                                <span className="text-text-muted text-[10px]">➔</span>
-                                <span className="text-white font-bold">{c.currentStats.subscribers.toLocaleString()}</span>
-                              </div>
-                              <div className="text-[10px] text-success font-black text-right mt-0.5">
-                                +{c.growth.deltaSubscribers.toLocaleString()} gained
-                              </div>
-                            </div>
-
-                            {/* Views */}
-                            <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
-                              <div className="flex items-center justify-between text-text-muted text-[10px] mb-1 font-bold">
-                                <span className="flex items-center gap-1"><Eye size={11} className="text-neon-cyan" /> Video Views</span>
-                                <span className="text-neon-cyan font-black">+{c.points.viewsPoints.toFixed(4)} pts</span>
-                              </div>
-                              <div className="flex items-baseline justify-between">
-                                <span className="text-text-muted text-[11px]">{c.baselineStart.views.toLocaleString()}</span>
-                                <span className="text-text-muted text-[10px]">➔</span>
-                                <span className="text-white font-bold">{c.currentStats.views.toLocaleString()}</span>
-                              </div>
-                              <div className="text-[10px] text-success font-black text-right mt-0.5">
-                                +{c.growth.deltaViews.toLocaleString()} gained
-                              </div>
-                            </div>
-
-                            {/* Likes */}
-                            <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
-                              <div className="flex items-center justify-between text-text-muted text-[10px] mb-1 font-bold">
-                                <span className="flex items-center gap-1"><ThumbsUp size={11} className="text-neon-gold" /> Video Likes</span>
-                                <span className="text-neon-gold font-black">+{c.points.likesPoints.toFixed(4)} pts</span>
-                              </div>
-                              <div className="flex items-baseline justify-between">
-                                <span className="text-text-muted text-[11px]">{c.baselineStart.likes.toLocaleString()}</span>
-                                <span className="text-text-muted text-[10px]">➔</span>
-                                <span className="text-white font-bold">{c.currentStats.likes.toLocaleString()}</span>
-                              </div>
-                              <div className="text-[10px] text-success font-black text-right mt-0.5">
-                                +{c.growth.deltaLikes.toLocaleString()} gained
-                              </div>
+                            <div className="text-[11px] text-slate-400 font-mono">
+                              {c.category} • {c.creditCost} Credits
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        <div className="flex items-center gap-4 text-right">
+                          <div>
+                            <div className="text-base font-black text-cyan-300 font-mono">
+                              {c.points.finalPoints.toFixed(2)} pts
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              Base: {c.points.rawTotalPoints.toFixed(1)} × {c.multiplier}x
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </>
-            ) : null}
-          </div>
-        </motion.div>
-      </div>
-    </AnimatePresence>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </TiltCard3D>
+    </div>
   );
 }

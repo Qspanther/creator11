@@ -1,27 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useAuth } from '../lib/auth-context';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { apiGet } from '../lib/api';
-import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { Trophy, Clock, Users, Coins, ArrowRight, Video, BarChart, Medal } from 'lucide-react';
-
-interface Tournament {
-  id: string;
-  name: string;
-  platform: string;
-  duration_type: string;
-  entry_fee: string;
-  prize_pool: string;
-  lock_time: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  current_participants: number;
-  max_participants: number;
-  rankings_finalized?: boolean | number;
-}
+import { useAuth } from '../lib/auth-context';
+import TiltCard3D from '../components/ui/TiltCard3D';
+import { playSpatialSFX } from '../components/ui/StageControls3D';
+import { Trophy, Clock, Users, ArrowRight, BarChart3, ShieldCheck } from 'lucide-react';
 
 function CountdownTimer({ targetDate }: { targetDate: string }) {
   const [timeLeft, setTimeLeft] = useState('');
@@ -30,7 +15,7 @@ function CountdownTimer({ targetDate }: { targetDate: string }) {
     const update = () => {
       const diff = new Date(targetDate).getTime() - Date.now();
       if (diff <= 0) {
-        setTimeLeft('Started');
+        setTimeLeft('Live Now');
         return;
       }
       const h = Math.floor(diff / 3600000);
@@ -43,168 +28,146 @@ function CountdownTimer({ targetDate }: { targetDate: string }) {
     return () => clearInterval(interval);
   }, [targetDate]);
 
-  return <span>{timeLeft}</span>;
+  return <span className="font-mono text-cyan-300">{timeLeft}</span>;
 }
 
-export default function TournamentListPage() {
+export default function TournamentsPage3D() {
   const { token } = useAuth();
-  const router = useRouter();
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      apiGet(`/tournaments`, token)
-        .then(data => setTournaments(data))
-        .catch(() => {})
-        .finally(() => setLoading(false));
-    }
+    apiGet('/tournaments', token)
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.tournaments;
+        if (Array.isArray(list) && list.length > 0) setTournaments(list);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [token]);
 
-  const durationLabels: Record<string, string> = {
-    '6h': '6-Hour Flash Blitz',
-    '24h': '24-Hour Sprint',
-    '2d': '2-Day Challenge',
-    '48h': '48-Hour Weekend Clash',
-    '3d': '3-Day Marathon',
-    '72h': '72-Hour Weekly Showdown',
-  };
+  const filtered = tournaments.filter((t) => {
+    if (statusFilter === 'all') return true;
+    return t.status === statusFilter;
+  });
 
   return (
-    <div className="max-w-6xl mx-auto py-2">
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <div className="flex items-center gap-3 mb-2">
-          <Trophy size={32} className="text-neon-gold" />
-          <h1 className="text-3xl font-extrabold text-white">Fantasy Battle Leagues</h1>
+    <div className="px-4 sm:px-8 py-8 max-w-7xl mx-auto w-full space-y-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <div className="text-xs font-mono uppercase text-cyan-400">LEAGUE LOBBY • /tournaments</div>
+          <h1 className="text-3xl sm:text-4xl font-black mt-1">3D Creator Tournaments</h1>
+          <p className="text-sm text-slate-400">
+            Compete in 24-Hour, 2-Day, and 3-Day Creator Cups with 1,000-Rank Smart Prize Pools and Never-Lose Guarantee.
+          </p>
         </div>
-        <p className="text-sm text-text-secondary">
-          Compete in live delta-growth tournaments, inspect real-time scorecards, and win ₹ (INR) cash prize pools!
-        </p>
-      </motion.div>
+
+        <div className="flex flex-wrap gap-2">
+          {['all', 'live', 'upcoming', 'completed'].map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => {
+                playSpatialSFX('click');
+                setStatusFilter(st);
+              }}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase transition ${
+                statusFilter === st
+                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/30'
+                  : 'bg-white/5 text-slate-300 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-2 border-neon-cyan border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {tournaments.map((t, i) => {
-            const isLive = t.status === 'live';
-            const isCompleted = t.status === 'completed';
-            const isUpcoming = t.status === 'upcoming';
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filtered.map((t) => {
+            const cur = t.current_participants || 0;
+            const max = t.max_participants || 1200;
+            const pct = Math.min(100, Math.round((cur / max) * 100));
 
             return (
-              <motion.div
-                key={t.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.08 }}
-                whileHover={{ y: -6 }}
-                className={`glass p-6 rounded-3xl flex flex-col transition-all border ${
-                  isLive
-                    ? 'border-success/40 bg-success/[0.03] shadow-lg shadow-success/10'
-                    : isCompleted
-                      ? 'border-neon-gold/30 bg-neon-gold/[0.02]'
-                      : 'border-white/5 hover:border-white/15'
-                }`}
-              >
-                {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-[11px] font-black uppercase tracking-wider text-neon-cyan">
-                    {durationLabels[t.duration_type] || t.duration_type}
-                  </span>
-                  <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                    isUpcoming ? 'bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30' :
-                    isLive ? 'bg-success/20 text-success border border-success/40' :
-                    isCompleted ? 'bg-neon-gold/20 text-neon-gold border border-neon-gold/40' :
-                    'bg-text-muted/10 text-text-muted'
-                  }`}>
-                    {t.status.toUpperCase()}
-                  </span>
+              <TiltCard3D key={t.id} className="p-6 flex flex-col justify-between space-y-4 border border-white/10">
+                <div className="space-y-3 depth-layer-10">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-red-500/20 text-red-300 border border-red-400/30">
+                      {t.platform} • {t.duration_type || '24h'}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 uppercase">
+                      ● {t.status}
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-black text-white">{t.name}</h3>
+
+                  <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-black/45 border border-white/10">
+                    <div>
+                      <div className="text-[11px] text-slate-400">Prize Pool</div>
+                      <div className="text-xl font-black text-amber-300 font-mono">
+                        ₹{Number(t.prize_pool || 50000).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-slate-400">Entry Fee</div>
+                      <div className="text-lg font-black text-cyan-300 font-mono">
+                        ₹{Number(t.entry_fee || 99).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                      {t.lock_time ? <CountdownTimer targetDate={t.lock_time} /> : <span>Lock in 30m</span>}
+                    </div>
+                    <div className="flex items-center gap-1 text-emerald-400 font-semibold">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Top 1000 Prize</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs text-slate-300">
+                      <span>{cur} / {max} Players Drafted</span>
+                      <span className="font-mono text-cyan-300">{pct}% Full</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-purple-500 via-cyan-400 to-emerald-400"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <h3 className="text-lg font-extrabold text-white mb-4 flex items-center gap-2 line-clamp-1">
-                  <Video size={18} className="text-red-500 shrink-0" />
-                  {t.name}
-                </h3>
+                <div className="space-y-2 pt-2">
+                  <Link
+                    href={`/team-builder/${t.id}`}
+                    onClick={() => playSpatialSFX('power')}
+                    className="w-full py-3 rounded-xl font-extrabold text-xs sm:text-sm text-center bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg hover:opacity-95 transition block"
+                  >
+                    ⚡ Enter & Draft in 3D Pitch
+                  </Link>
 
-                {/* Stats */}
-                <div className="space-y-3 mb-6 flex-1 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-secondary flex items-center gap-2">
-                      <Coins size={14} className="text-neon-gold" /> Entry Fee
-                    </span>
-                    <span className="font-extrabold text-white">₹{parseFloat(t.entry_fee).toFixed(0)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-secondary flex items-center gap-2">
-                      <Trophy size={14} className="text-neon-cyan" /> Prize Pool
-                    </span>
-                    <span className="font-black text-neon-gold text-base">₹{parseFloat(t.prize_pool).toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-text-secondary flex items-center gap-2">
-                      <Users size={14} className="text-neon-purple" /> Participants
-                    </span>
-                    <span className="font-bold text-white">{t.current_participants}/{t.max_participants}</span>
-                  </div>
-                  {isUpcoming && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-text-secondary flex items-center gap-2">
-                        <Clock size={14} className="text-warning" /> Locks In
-                      </span>
-                      <span className="font-bold text-warning text-xs">
-                        <CountdownTimer targetDate={t.lock_time} />
-                      </span>
-                    </div>
-                  )}
+                  <Link
+                    href={`/leaderboard/${t.id}`}
+                    onClick={() => playSpatialSFX('click')}
+                    className="w-full py-2 rounded-xl font-semibold text-xs text-center bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10 transition flex items-center justify-center gap-1.5"
+                  >
+                    <BarChart3 className="w-3.5 h-3.5 text-amber-300" />
+                    <span>View Live Leaderboard & Prizes</span>
+                  </Link>
                 </div>
-
-                {/* Action Buttons */}
-                {isUpcoming && (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => router.push(`/team-builder/${t.id}`)}
-                    className="w-full py-3 text-sm font-black bg-gradient-to-r from-neon-cyan to-blue-500 text-black rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-neon-cyan/20 cursor-pointer"
-                  >
-                    Join Contest <ArrowRight size={16} />
-                  </motion.button>
-                )}
-
-                {isLive && (
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => router.push(`/leaderboard/${t.id}`)}
-                    className="w-full py-3 text-sm font-black bg-gradient-to-r from-success to-emerald-600 text-black rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-success/20 cursor-pointer"
-                  >
-                    <BarChart size={16} /> Live Leaderboard & Standings
-                  </motion.button>
-                )}
-
-                {isCompleted && (
-                  t.rankings_finalized !== false && t.rankings_finalized !== 0 ? (
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => router.push(`/leaderboard/${t.id}`)}
-                      className="w-full py-3 text-sm font-black bg-gradient-to-r from-neon-gold to-amber-500 text-black rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-neon-gold/20 cursor-pointer"
-                    >
-                      <Medal size={16} /> View Top 100 Winners
-                    </motion.button>
-                  ) : (
-                    <div className="w-full py-3 px-3 text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl flex items-center justify-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-                      Auditing Results & Finalizing Ranks (Ready in 1 min)...
-                    </div>
-                  )
-                )}
-              </motion.div>
+              </TiltCard3D>
             );
           })}
         </div>

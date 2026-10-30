@@ -38,7 +38,15 @@ const Creator = sequelize.define('Creator', {
     type: DataTypes.STRING,
     allowNull: true,
   },
-  // Base stats for mock data generation
+  latest_video_title: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  latest_video_url: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  // Base stats for real-time tracking
   base_views: {
     type: DataTypes.INTEGER,
     defaultValue: 0,

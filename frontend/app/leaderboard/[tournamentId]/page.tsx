@@ -30,6 +30,8 @@ interface LeaderboardEntry {
   userEmail?: string;
   totalPoints: number;
   prizeAmount: number;
+  isRefund: boolean;       // true if entry is a refund (prize < ₹100 or rank > 1000)
+  platformFee: number;     // always 2 for refund users, 0 for winners
   isCurrentUser: boolean;
   canViewTeam: boolean;
 }
@@ -238,9 +240,13 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
               <>
                 <p className="text-xs text-text-muted font-medium">Total Team Score</p>
                 <p className="text-xl font-black text-neon-gold">{userPoints.toFixed(4)} pts</p>
-                {userPrize && userPrize > 0 ? (
-                  <span className="inline-block mt-0.5 text-xs font-bold text-success">
-                    🏆 +₹{userPrize.toLocaleString('en-IN')} Won
+                {userPrize && userPrize >= 100 ? (
+                  <span className="inline-block mt-0.5 text-xs font-bold text-neon-gold">
+                    🏆 +₹{userPrize.toLocaleString('en-IN')} Prize Won
+                  </span>
+                ) : showRankings ? (
+                  <span className="inline-block mt-0.5 text-xs font-bold text-emerald-400">
+                    🛡️ ₹97 Refunded • ₹2 platform fee deducted
                   </span>
                 ) : null}
               </>
@@ -360,14 +366,14 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
                       )}
                     </div>
 
-                    {showRankings && entry.prizeAmount > 0 && (
-                      entry.prizeAmount > 99 ? (
+                    {showRankings && (
+                      entry.prizeAmount >= 100 ? (
                         <p className="text-[11px] font-bold text-neon-gold mt-0.5">
-                          🏆 +₹{entry.prizeAmount.toLocaleString('en-IN')} Won
+                          🏆 +₹{entry.prizeAmount.toLocaleString('en-IN')} Prize Won
                         </p>
                       ) : (
                         <p className="text-[11px] font-semibold text-emerald-400 mt-0.5">
-                          🛡️ ₹99.00 100% Refunded
+                          🛡️ ₹97 Refunded • <span className="text-text-muted">₹2 fee</span>
                         </p>
                       )
                     )}

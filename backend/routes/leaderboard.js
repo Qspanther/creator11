@@ -5,7 +5,7 @@ const { calculateScores } = require('../services/scoring-engine');
 
 const router = express.Router();
 
-// GET /leaderboard/:tournamentId — Get tournament leaderboard (Top 300 participants)
+// GET /leaderboard/:tournamentId — Get tournament leaderboard (Top 1200 participants)
 router.get('/:tournamentId', authenticate, async (req, res) => {
   try {
     const tournamentId = req.params.tournamentId;
@@ -25,7 +25,7 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
           attributes: ['id', 'name'],
         },
       ],
-      limit: 300,
+      limit: 1200,
     });
 
     // Auto-compute scores if live or completed and no leaderboard entries yet
@@ -42,7 +42,7 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
               attributes: ['id', 'name'],
             },
           ],
-          limit: 300,
+          limit: 1200,
         });
       } catch (err) {
         console.error('Error auto-calculating leaderboard:', err);
@@ -67,17 +67,23 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
         rankingsFinalized: tournament.rankings_finalized !== false && tournament.rankings_finalized !== 0,
       },
       canViewTeams,
-      entries: entries.map(e => ({
-        rank: e.rank,
-        teamId: e.team_id,
-        userId: e.user_id,
-        userName: e.user ? e.user.name : 'Unknown User',
-        userEmail: e.user_id === req.userId ? (e.user ? e.user.email : '') : undefined,
-        totalPoints: parseFloat(e.total_points),
-        prizeAmount: parseFloat(e.prize_amount || 0),
-        isCurrentUser: e.user_id === req.userId,
-        canViewTeam: true,
-      })),
+      entries: entries.map(e => {
+        const prizeAmt = parseFloat(e.prize_amount || 0);
+        const isRefund = prizeAmt < 100; // If prize < ₹100, it's a refund entry
+        return {
+          rank: e.rank,
+          teamId: e.team_id,
+          userId: e.user_id,
+          userName: e.user ? e.user.name : 'Unknown User',
+          userEmail: e.user_id === req.userId ? (e.user ? e.user.email : '') : undefined,
+          totalPoints: parseFloat(e.total_points),
+          prizeAmount: prizeAmt,
+          isRefund,
+          platformFee: isRefund ? 2 : 0,
+          isCurrentUser: e.user_id === req.userId,
+          canViewTeam: true,
+        };
+      }),
       userRank: userEntry ? userEntry.rank : null,
       userPoints: userEntry ? parseFloat(userEntry.total_points) : null,
       userPrize: userEntry ? parseFloat(userEntry.prize_amount || 0) : 0,

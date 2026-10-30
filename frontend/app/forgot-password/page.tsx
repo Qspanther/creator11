@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -23,8 +23,8 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await apiPost('/auth/forgot-password', { email });
-      setSuccessMsg(`OTP Sent! (Mock OTP: ${data.mockOtp})`);
+      await apiPost('/auth/forgot-password', { email });
+      setSuccessMsg('OTP sent! Please check your email inbox.');
       setStep(2);
     } catch (err: any) {
       setError(err.message || 'Failed to send OTP');
@@ -59,7 +59,7 @@ export default function ForgotPasswordPage() {
           
           <h2 className="text-2xl font-bold mb-2 text-center">Reset Password</h2>
           <p className="text-sm text-text-secondary mb-6 text-center">
-            {step === 1 ? "Enter your email to receive an OTP" : "Enter the OTP and your new password"}
+            {step === 1 ? "Enter your email to receive an OTP" : "Enter the OTP sent to your email and set a new password"}
           </p>
 
           {error && <div className="mb-4 p-3 rounded-xl bg-danger/10 text-sm text-danger text-center">{error}</div>}
@@ -93,7 +93,7 @@ export default function ForgotPasswordPage() {
                   type="text"
                   placeholder="Enter 6-digit OTP"
                   value={otp}
-                  onChange={e => setOtp(e.target.value)}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   required
                   maxLength={6}
                   className="w-full !pl-10 font-mono tracking-widest"

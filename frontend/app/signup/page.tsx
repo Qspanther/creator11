@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -28,10 +28,9 @@ export default function SignupPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await apiPost('/auth/signup', form);
-      // Store email and OTP for verification page
+      await apiPost('/auth/signup', form);
+      // Store email for OTP verification page
       sessionStorage.setItem('otp_email', form.email);
-      sessionStorage.setItem('mock_otp', data.mockOtp);
       router.push('/verify-otp');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Signup failed');

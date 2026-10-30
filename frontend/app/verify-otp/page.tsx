@@ -1,26 +1,23 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { motion } from 'framer-motion';
 import { apiPost } from '../lib/api';
-import { ShieldCheck, Zap } from 'lucide-react';
+import { ShieldCheck, Zap, Mail } from 'lucide-react';
 
 export default function VerifyOtpPage() {
   const router = useRouter();
   const { login } = useAuth();
   const [otp, setOtp] = useState('');
   const [email, setEmail] = useState('');
-  const [mockOtp, setMockOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const e = sessionStorage.getItem('otp_email');
-    const o = sessionStorage.getItem('mock_otp');
     if (e) setEmail(e);
-    if (o) setMockOtp(o);
     if (!e) router.push('/signup');
   }, [router]);
 
@@ -32,7 +29,6 @@ export default function VerifyOtpPage() {
       const data = await apiPost('/auth/verify-otp', { email, otp });
       login(data.token, data.user);
       sessionStorage.removeItem('otp_email');
-      sessionStorage.removeItem('mock_otp');
       router.push('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Verification failed');
@@ -64,17 +60,16 @@ export default function VerifyOtpPage() {
             </div>
           </div>
 
-          {/* MOCK OTP Display */}
-          {mockOtp && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-6 p-4 rounded-xl bg-neon-purple/10 border border-neon-purple/20"
-            >
-              <p className="text-xs text-text-muted mb-1">🔑 MOCK OTP (for testing)</p>
-              <p className="text-3xl font-mono font-bold text-neon-purple tracking-[0.3em]">{mockOtp}</p>
-            </motion.div>
-          )}
+          {/* Email sent notice */}
+          <div className="mb-6 p-4 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-start gap-3">
+            <Mail size={18} className="text-neon-cyan mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-neon-cyan">OTP Email Sent!</p>
+              <p className="text-xs text-text-muted mt-0.5">
+                Please check your inbox (and spam folder) at <strong className="text-white">{email}</strong>
+              </p>
+            </div>
+          </div>
 
           {error && (
             <div className="mb-4 p-3 rounded-xl bg-danger/10 border border-danger/20 text-sm text-danger">

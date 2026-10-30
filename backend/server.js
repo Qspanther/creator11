@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
@@ -12,13 +12,13 @@ const { authenticate, isAdmin } = require('./middleware/auth');
 const app = express();
 
 
-// ─── Security Headers (Helmet) ───
+// â”€â”€â”€ Security Headers (Helmet) â”€â”€â”€
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
   contentSecurityPolicy: false, // Managed by client frontend
 }));
 
-// ─── Rate Limiting (DDoS & Brute-Force Protection) ───
+// â”€â”€â”€ Rate Limiting (DDoS & Brute-Force Protection) â”€â”€â”€
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 600, // 600 requests per 15 minutes per IP
@@ -83,6 +83,22 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// YouTube Live Tracker status & manual sync endpoints
+const { startYouTubeTracker, syncNow, getStatus } = require('./services/youtubeSyncService');
+
+app.get('/admin/youtube-tracker/status', (req, res) => {
+  res.json({ success: true, tracker: getStatus() });
+});
+
+app.post('/admin/youtube-tracker/sync', async (req, res) => {
+  try {
+    const result = await syncNow();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Manual scoring trigger (for testing)
 app.post('/admin/trigger-scoring/:tournamentId', authenticate, isAdmin, async (req, res) => {
   try {
@@ -133,31 +149,35 @@ async function start() {
   try {
     // Sync database
     await sequelize.sync();
-    console.log('📦 Database synced');
+    console.log('ðŸ“¦ Database synced');
 
     // Check if we need to seed
     const { Creator } = require('./db/models');
     const creatorCount = await Creator.count();
     if (creatorCount === 0) {
-      console.log('🌱 No creators found, running seed...');
+      console.log('ðŸŒ± No creators found, running seed...');
       await seed();
     }
 
     // Start the scheduler
     startScheduler();
 
+    // Start YouTube Live Stats Tracker daemon (24/7 background sync)
+    startYouTubeTracker();
+
     // Start listening
     const HOST = process.env.HOST || '0.0.0.0';
     app.listen(config.PORT, HOST, () => {
-      console.log(`🚀 Creator11 API running on http://localhost:${config.PORT}`);
-      console.log(`📋 Config endpoint: http://localhost:${config.PORT}/api/config`);
-      console.log(`🏥 Health check: http://localhost:${config.PORT}/health`);
-      console.log(`🤖 Bot Manager endpoint: http://localhost:${config.PORT}/bot-manager`);
+      console.log(`ðŸš€ Creator11 API running on http://localhost:${config.PORT}`);
+      console.log(`ðŸ“‹ Config endpoint: http://localhost:${config.PORT}/api/config`);
+      console.log(`ðŸ¥ Health check: http://localhost:${config.PORT}/health`);
+      console.log(`ðŸ¤– Bot Manager endpoint: http://localhost:${config.PORT}/bot-manager`);
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('âŒ Failed to start server:', error);
     process.exit(1);
   }
 }
 
 start();
+

@@ -14,3 +14,12 @@ build/
 
 # Logs
 *.log
+
+# Python
+**/__pycache__/
+*.py[cod]
+
+# SQLite temp/journals
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm

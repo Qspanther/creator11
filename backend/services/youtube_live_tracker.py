@@ -11,21 +11,26 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tubescrape import YouTube
 
-# Explicit absolute path to Creator11 backend SQLite database
-DB_PATH = r'C:\Users\abbu\Documents\creator 11\creator11\backend\creator11.sqlite'
+# ─── Dynamic Database Resolution ───
+DEFAULT_DB = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'creator11.sqlite'))
+DB_PATH = os.environ.get('DB_STORAGE', DEFAULT_DB)
+if not os.path.exists(DB_PATH):
+    fallback_path = r'C:\Users\abbu\Documents\creator 11\creator11\backend\creator11.sqlite'
+    if os.path.exists(fallback_path):
+        DB_PATH = fallback_path
 
-# Scraping settings
-POLL_INTERVAL_SECONDS = 10  # 10s as requested by user
+# ─── Scraping Configuration ───
+POLL_INTERVAL_SECONDS = 10
 CONCURRENT_WORKERS = 5
 VIDEO_CACHE_TTL_MINUTES = 5
 
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
 HEADERS = {
     'User-Agent': USER_AGENT,
     'Accept-Language': 'en-US,en;q=0.9',
 }
 
-# Cache for latest video metadata: { creator_id: { 'video_url': str, 'video_title': str, 'fetched_at': float } }
+# Cache for latest video metadata: { creator_id: { 'video_url': str, 'video_title': str, 'subscribers': int, 'fetched_at': float } }
 creator_video_cache = {}
 
 def get_db():
@@ -34,23 +39,41 @@ def get_db():
     return conn
 
 def parse_subscribers(sub_str):
+    """
+    Parses subscriber string into an integer.
+    Supports English (K, M, B) and Indian numbering terms (lakh, crore, lac, cr).
+    """
     if not sub_str:
         return 0
-    clean = str(sub_str).lower().replace('subscribers', '').strip()
+    clean = str(sub_str).lower().replace('subscribers', '').replace('subscriber', '').replace('सदस्य', '').strip()
+
     multiplier = 1
-    if 'm' in clean:
+    if 'crore' in clean or 'cr' in clean or 'करोड़' in clean:
+        multiplier = 10_000_000
+        clean = re.sub(r'(crore|cr|करोड़)', '', clean).strip()
+    elif 'lakh' in clean or 'lac' in clean or 'लाख' in clean:
+        multiplier = 100_000
+        clean = re.sub(r'(lakh|lac|लाख)', '', clean).strip()
+    elif 'b' in clean:
+        multiplier = 1_000_000_000
+        clean = clean.replace('b', '').strip()
+    elif 'm' in clean:
         multiplier = 1_000_000
         clean = clean.replace('m', '').strip()
     elif 'k' in clean:
         multiplier = 1_000
         clean = clean.replace('k', '').strip()
-    elif 'b' in clean:
-        multiplier = 1_000_000_000
-        clean = clean.replace('b', '').strip()
+    elif 'l' in clean and not ('live' in clean or 'like' in clean):
+        multiplier = 100_000
+        clean = clean.replace('l', '').strip()
+
+    clean = clean.replace(',', '').strip()
     try:
         return int(float(clean) * multiplier)
-    except:
-        return 0
+    except Exception:
+        # Fallback: extract all digits
+        digits = re.sub(r'[^\d]', '', clean)
+        return int(digits) if digits else 0
 
 def calculate_exact_subscribers(creator_id, handle, official_subs, current_views, prev_views=0, prev_subs=0):
     """
@@ -132,7 +155,7 @@ def fetch_creator_latest_video(handle):
                 about = yt.get_channel_about(handle)
                 if about and hasattr(about, 'subscriber_count'):
                     subscribers = parse_subscribers(about.subscriber_count)
-            except Exception as e:
+            except Exception:
                 pass
 
             # 2. Get latest LONG video (scan top results to bypass any Shorts)
@@ -149,7 +172,7 @@ def fetch_creator_latest_video(handle):
     return video_url, video_title, subscribers
 
 def scrape_exact_video_metrics(video_url):
-    """Scrapes exact integer views and likes from video watch page."""
+    """Scrapes exact integer views and likes from video watch page with multi-tier fallback."""
     if not video_url:
         return 0, 0
 
@@ -160,7 +183,8 @@ def scrape_exact_video_metrics(video_url):
         resp = requests.get(video_url, headers=HEADERS, timeout=15)
         html = resp.text
 
-        # Extract views from ytInitialData
+        # ── 1. Views Extraction (Multi-pattern) ──
+        # Pattern A: ytInitialData videoPrimaryInfoRenderer
         match = re.search(r"var ytInitialData\s*=\s*(\{.*?\});</script>", html) or re.search(r'window\["ytInitialData"\]\s*=\s*(\{.*?\});', html)
         if match:
             try:
@@ -177,22 +201,43 @@ def scrape_exact_video_metrics(video_url):
             except Exception:
                 pass
 
-        # Extract exact likes from accessibility text or button view model
+        # Pattern B: direct viewCount JSON field
+        if views == 0:
+            m_views = re.search(r'"viewCount":"(\d+)"', html) or re.search(r'"views":\{"simpleText":"([\d,]+)"', html)
+            if m_views:
+                views = int(m_views.group(1).replace(',', ''))
+
+        # Pattern C: videoDetails viewCount
+        if views == 0:
+            m_vd = re.search(r'"videoDetails":\{.*?"viewCount":"(\d+)"', html)
+            if m_vd:
+                views = int(m_vd.group(1))
+
+        # ── 2. Likes Extraction (Multi-pattern) ──
+        # Pattern A: accessibilityText ("like this video along with X other people")
         like_acc = re.search(r'"accessibilityText":\s*"like this video along with ([\d,]+) other people"', html, re.IGNORECASE)
         if like_acc:
             likes = int(like_acc.group(1).replace(',', ''))
-        else:
-            # Fallback 1: search for like count in microformat
+
+        # Pattern B: likeCount in microformat
+        if likes == 0:
             mf_match = re.search(r'"likeCount":"(\d+)"', html)
             if mf_match:
                 likes = int(mf_match.group(1))
-            else:
-                # Fallback 2: search for button title
-                for btn in re.findall(r'"iconName":\s*"LIKE"[^}]+"title":\s*"([^"]+)"', html):
-                    ld = re.sub(r'[^\d]', '', btn)
-                    if ld:
-                        likes = parse_subscribers(btn)
-                        break
+
+        # Pattern C: accessibilityData label ("X likes")
+        if likes == 0:
+            m_lbl = re.search(r'"accessibilityData":\{"label":"([\d,]+)\s+likes"', html, re.IGNORECASE)
+            if m_lbl:
+                likes = int(m_lbl.group(1).replace(',', ''))
+
+        # Pattern D: iconName LIKE button title
+        if likes == 0:
+            for btn in re.findall(r'"iconName":\s*"LIKE"[^}]+"title":\s*"([^"]+)"', html):
+                ld = re.sub(r'[^\d]', '', btn)
+                if ld:
+                    likes = parse_subscribers(btn)
+                    break
 
     except Exception as e:
         print(f"[YT-SYNC] ⚠️ Video scrape timeout for {video_url}: {e}")
@@ -215,7 +260,7 @@ def process_creator(creator):
 
     video_url = None
     video_title = None
-    official_subs = creator['base_followers'] or 0
+    official_subs = creator.get('base_followers') or 0
 
     if need_video_refresh:
         video_url, video_title, subs = fetch_creator_latest_video(handle)
@@ -230,23 +275,27 @@ def process_creator(creator):
     else:
         video_url = cache_entry['video_url']
         video_title = cache_entry['video_title']
-        official_subs = cache_entry.get('subscribers', creator['base_followers'])
+        official_subs = cache_entry.get('subscribers', creator.get('base_followers', 0))
 
     views, likes = scrape_exact_video_metrics(video_url)
 
     # Use existing values if scrape returned 0 due to transient network glitch
-    final_views = views if views > 0 else (creator['base_views'] or 0)
-    final_likes = likes if likes > 0 else (creator['base_likes'] or 0)
+    final_views = views if views > 0 else (creator.get('base_views') or 0)
+    final_likes = likes if likes > 0 else (creator.get('base_likes') or 0)
 
     # Calculate exact non-rounded subscriber digits
     final_subs = calculate_exact_subscribers(
         creator_id, handle, official_subs,
         current_views=final_views,
-        prev_views=creator['base_views'] or 0,
-        prev_subs=creator['base_followers'] or 0
+        prev_views=creator.get('base_views') or 0,
+        prev_subs=creator.get('base_followers') or 0
     )
 
-    changed = (final_views != creator['base_views'] or final_likes != creator['base_likes'] or final_subs != creator['base_followers'])
+    changed = (
+        final_views != creator.get('base_views') or
+        final_likes != creator.get('base_likes') or
+        final_subs != creator.get('base_followers')
+    )
 
     return {
         'id': creator_id,
@@ -269,9 +318,10 @@ def update_creators_in_db(results):
     for r in results:
         cursor.execute("""
             UPDATE creators
-            SET base_views = ?, base_likes = ?, base_followers = ?, updated_at = CURRENT_TIMESTAMP
+            SET base_views = ?, base_likes = ?, base_followers = ?,
+                latest_video_title = ?, latest_video_url = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        """, (r['views'], r['likes'], r['subscribers'], r['id']))
+        """, (r['views'], r['likes'], r['subscribers'], r.get('video_title'), r.get('video_url'), r['id']))
         if r['changed']:
             updated_count += 1
 
@@ -282,6 +332,57 @@ def update_creators_in_db(results):
     conn.close()
     return updated_count
 
+def calculate_prize_for_rank(rank, rank1_prize):
+    """
+    Smart Prize Tier Algorithm:
+    Rank 1: 100% of Rank 1 Prize Pool
+    Rank 2: 50%
+    Rank 3: 25%
+    Rank 4: 10%
+    Rank 5: 7%
+    Rank 6-10: 4% each
+    Rank 11-100: 2% each
+    Rank 101-200: 1% each
+    Rank 201-300: 0.50% each
+    Rank 301-500: 0.30% each
+    Rank 501-750: 0.15% each
+    Rank 751-1000: 0.10% each
+    Threshold: Minimum ₹100. Any rank > 1000 or prize < 100 -> ₹0 (receives ₹97 refund)
+    """
+    if not rank1_prize or rank1_prize <= 0:
+        return 0.0
+
+    r1 = float(rank1_prize)
+    if rank == 1:
+        pct = 1.0
+    elif rank == 2:
+        pct = 0.50
+    elif rank == 3:
+        pct = 0.25
+    elif rank == 4:
+        pct = 0.10
+    elif rank == 5:
+        pct = 0.07
+    elif 6 <= rank <= 10:
+        pct = 0.04
+    elif 11 <= rank <= 100:
+        pct = 0.02
+    elif 101 <= rank <= 200:
+        pct = 0.01
+    elif 201 <= rank <= 300:
+        pct = 0.005
+    elif 301 <= rank <= 500:
+        pct = 0.003
+    elif 501 <= rank <= 750:
+        pct = 0.0015
+    elif 751 <= rank <= 1000:
+        pct = 0.001
+    else:
+        return 0.0
+
+    prize = round(r1 * pct, 2)
+    return prize if prize >= 100.0 else 0.0
+
 def sync_tournament_scoring(cursor, results):
     """
     Synchronizes snapshots and live scoring for tournaments:
@@ -290,7 +391,8 @@ def sync_tournament_scoring(cursor, results):
     • 500 likes gained = 1 pt (diff / 500)
     • 100 subscribers gained = 1 pt (diff / 100)
     • Captain (2.0x), Vice-Captain (1.5x)
-    • Zero duplicate snapshots (upsert pattern)
+    • Upserts snapshots without duplicates
+    • Uses the consistent smart prize distribution formula
     """
     results_map = {r['id']: r for r in results}
 
@@ -338,7 +440,7 @@ def sync_tournament_scoring(cursor, results):
                     INSERT INTO creator_stats_snapshots
                     (id, creator_id, tournament_id, snapshot_type, views, likes, followers, video_title, video_url, is_pre_contest, captured_at, created_at, updated_at)
                     VALUES (lower(hex(randomblob(16))), ?, ?, 'start', ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """, (r['id'], t_id, r['views'], r['likes'], r['subscribers'], r['video_title'], r['video_url']))
+                """, (r['id'], t_id, r['views'], r['likes'], r['subscribers'], r.get('video_title'), r.get('video_url')))
                 start_snaps[r['id']] = {
                     'views': r['views'],
                     'likes': r['likes'],
@@ -364,7 +466,7 @@ def sync_tournament_scoring(cursor, results):
                     video_url = excluded.video_url,
                     captured_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
-            """, (r['id'], t_id, r['views'], r['likes'], r['subscribers'], r['video_title'], r['video_url']))
+            """, (r['id'], t_id, r['views'], r['likes'], r['subscribers'], r.get('video_title'), r.get('video_url')))
 
         # Recalculate team scores and leaderboard
         cursor.execute("SELECT id, user_id, captain_creator_id, vice_captain_creator_id FROM teams WHERE tournament_id = ?", (t_id,))
@@ -411,25 +513,12 @@ def sync_tournament_scoring(cursor, results):
 
         # Sort leaderboard descending
         team_leaderboard.sort(key=lambda x: x['total_points'], reverse=True)
-        total_p = len(team_leaderboard)
 
-        # Update leaderboard table
+        # Update leaderboard table with consistent Smart Prize Algorithm
         cursor.execute("DELETE FROM leaderboard WHERE tournament_id = ?", (t_id,))
         for idx, entry in enumerate(team_leaderboard):
             rank = idx + 1
-            prize = 0.0
-            if total_p > 0 and prize_pool > 0:
-                rank_pct = ((rank - 1) / total_p) * 100
-                if rank_pct < 1:
-                    prize = round((prize_pool * 0.30) / max(1, round(total_p * 0.01)), 2)
-                elif rank_pct < 5:
-                    prize = round((prize_pool * 0.25) / max(1, round(total_p * 0.04)), 2)
-                elif rank_pct < 10:
-                    prize = round((prize_pool * 0.15) / max(1, round(total_p * 0.05)), 2)
-                elif rank_pct < 25:
-                    prize = round((prize_pool * 0.10) / max(1, round(total_p * 0.15)), 2)
-                elif rank_pct < 50:
-                    prize = round((prize_pool * 0.05) / max(1, round(total_p * 0.25)), 2)
+            prize = calculate_prize_for_rank(rank, prize_pool)
 
             cursor.execute("""
                 INSERT INTO leaderboard (id, tournament_id, team_id, user_id, total_points, rank, prize_amount, created_at, updated_at)
@@ -450,7 +539,7 @@ def run_sync_cycle(is_initial=False):
 
     if not creators:
         print("[YT-SYNC] No YouTube creators found in database.")
-        return
+        return 0
 
     print(f"\n[YT-SYNC] 🔄 Starting sync cycle for {len(creators)} YouTube creators ({datetime.now().strftime('%H:%M:%S')})...")
 
@@ -462,25 +551,32 @@ def run_sync_cycle(is_initial=False):
                 res = future.result()
                 results.append(res)
                 if is_initial or res['changed']:
-                    print(f"  ⚡ {res['name']:<22} | Views: {res['views']:>10,} | Likes: {res['likes']:>8,} | Subs: {res['subscribers']:>10,} | {res['video_title'][:28] if res['video_title'] else ''}")
+                    print(f"  ⚡ {res['name']:<22} | Views: {res['views']:>10,} | Likes: {res['likes']:>8,} | Subs: {res['subscribers']:>10,} | {res['video_title'][:28] if res.get('video_title') else ''}")
             except Exception as e:
                 print(f"[YT-SYNC] ⚠️ Error in worker: {e}")
 
     updated = update_creators_in_db(results)
     print(f"[YT-SYNC] ✅ Sync completed: {len(results)} creators processed, {updated} updated with live data.")
+    return updated
 
 def main():
+    run_once = '--once' in sys.argv
+
     print("=" * 70)
     print("  🚀 CREATOR11 YOUTUBE REAL-TIME LIVE STATS TRACKER")
     print(f"  Database: {DB_PATH}")
-    print(f"  Poll Interval: {POLL_INTERVAL_SECONDS} seconds")
+    print(f"  Mode: {'SINGLE SYNC' if run_once else f'CONTINUOUS DAEMON ({POLL_INTERVAL_SECONDS}s poll)'}")
     print("=" * 70)
 
-    # 1. Initial baseline verification on startup
-    print("\n[YT-SYNC] 🔍 Verifying all creators' latest video, exact views, likes, and subscribers on startup...")
+    # 1. Initial verification / single run
+    print("\n[YT-SYNC] 🔍 Verifying all creators' latest video, exact views, likes, and subscribers...")
     run_sync_cycle(is_initial=True)
 
-    # 2. Continuous 10-second polling loop
+    if run_once:
+        print("[YT-SYNC] Single sync completed. Exiting.")
+        return
+
+    # 2. Continuous polling loop
     print(f"\n[YT-SYNC] ⏱️ Entering live tracking loop (polling every {POLL_INTERVAL_SECONDS}s)...")
     while True:
         try:

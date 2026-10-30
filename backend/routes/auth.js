@@ -1,8 +1,9 @@
-const express = require('express');
+﻿const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { User, Wallet, SystemSetting, ReferralLog, Notification } = require('../db/models');
+const { sendSignupOtp, sendPasswordResetOtp } = require('../services/emailService');
 
 const { authenticate } = require('../middleware/auth');
 const router = express.Router();
@@ -54,7 +55,7 @@ router.post('/signup', async (req, res) => {
     // Hash password
     const password_hash = await bcrypt.hash(cleanPassword, 10);
 
-    // Generate OTP (mock — displayed, not sent)
+    // Generate OTP
     const otp_code = String(Math.floor(100000 + Math.random() * 900000));
     const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
 
@@ -149,14 +150,19 @@ router.post('/signup', async (req, res) => {
       }
     }
 
-    console.log(`📧 MOCK OTP for ${email}: ${otp_code}`);
+    // Send real OTP email (non-blocking — signup succeeds even if mail fails)
+    sendSignupOtp({
+      toEmail: cleanEmail,
+      name: cleanName,
+      otp: otp_code,
+      expiryMinutes: config.OTP_EXPIRY_MINUTES,
+    }).catch(err => console.error('Email send error (signup):', err.message));
 
     res.status(201).json({
-      message: 'Account created. Please verify OTP.',
+      message: 'Account created. OTP sent to your email. Please verify.',
       userId: user.id,
       email: user.email,
       referralCode: newReferralCode,
-      mockOtp: otp_code,
     });
   } catch (error) {
     console.error('Signup error:', error);
@@ -237,17 +243,21 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user.otp_verified) {
-      // Generate new OTP
+      // Generate new OTP and send via email
       const otp_code = String(Math.floor(100000 + Math.random() * 900000));
       const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
       await user.update({ otp_code, otp_expires_at });
 
-      console.log(`📧 MOCK OTP for ${email}: ${otp_code}`);
+      sendSignupOtp({
+        toEmail: cleanEmail,
+        name: user.name,
+        otp: otp_code,
+        expiryMinutes: config.OTP_EXPIRY_MINUTES,
+      }).catch(err => console.error('Email send error (login resend):', err.message));
 
       return res.status(403).json({
         error: 'OTP not verified',
         requiresOtp: true,
-        mockOtp: otp_code,
       });
     }
 
@@ -322,9 +332,16 @@ router.post('/forgot-password', async (req, res) => {
     const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
     
     await user.update({ otp_code, otp_expires_at });
-    console.log(`📧 MOCK RESET OTP for ${email}: ${otp_code}`);
 
-    res.json({ message: 'OTP sent', mockOtp: otp_code });
+    // Send real password reset OTP email
+    sendPasswordResetOtp({
+      toEmail: cleanEmail,
+      name: user.name,
+      otp: otp_code,
+      expiryMinutes: config.OTP_EXPIRY_MINUTES,
+    }).catch(err => console.error('Email send error (forgot-password):', err.message));
+
+    res.json({ message: 'OTP sent to your email.' });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }

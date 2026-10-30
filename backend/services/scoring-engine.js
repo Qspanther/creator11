@@ -113,20 +113,50 @@ async function takeSnapshot(tournamentId, snapshotType) {
 }
 
 /**
- * Calculate prize distribution amounts for leaderboard ranks
+ * Calculate prize amount for a given rank based on Rank 1 prize.
+ *
+ * Prize tiers (% of Rank 1 prize):
+ *   Rank 1        → rank1Prize (as-is)
+ *   Rank 2        → 50%
+ *   Rank 3        → 25%
+ *   Rank 4        → 10%
+ *   Rank 5        → 7%
+ *   Ranks 6–10    → 4% each
+ *   Ranks 11–100  → 2% each
+ *   Ranks 101–200 → 1% each
+ *   Ranks 201–300 → 0.50% each
+ *   Ranks 301–500 → 0.30% each
+ *   Ranks 501–750 → 0.15% each
+ *   Ranks 751–1000→ 0.10% each
+ *   Rank 1001+    → 0 (triggers refund in distributePrizes)
+ *
+ * Returns 0 if calculated prize is below minimum threshold (triggers refund path).
  */
-function calculatePrizeForRank(rank, totalParticipants, prizePool) {
-  if (!totalParticipants || !prizePool || totalParticipants <= 0) return 0;
-  const rankPercent = ((rank - 1) / totalParticipants) * 100;
-  const slab = config.PRIZE_DISTRIBUTION_SLABS.find(
-    s => rankPercent >= s.minRankPercent && rankPercent < s.maxRankPercent
-  );
-  if (!slab) return 0;
+const MIN_PRIZE_AMOUNT = 100; // Minimum prize to be a "winner"
+const PLATFORM_FEE = 2;       // ₹2 platform charge
+const REFUND_AMOUNT = 97;     // ₹99 - ₹2 = ₹97 refund
 
-  // Approximate winner count in this slab
-  const winnersInSlab = Math.max(1, Math.round(totalParticipants * ((slab.maxRankPercent - slab.minRankPercent) / 100)));
-  const slabTotal = prizePool * slab.payoutPercent;
-  return parseFloat((slabTotal / winnersInSlab).toFixed(2));
+function calculatePrizeForRank(rank, rank1Prize) {
+  if (!rank1Prize || rank1Prize <= 0) return 0;
+  const r1 = parseFloat(rank1Prize);
+
+  let pct = 0;
+  if (rank === 1) return parseFloat(r1.toFixed(2));
+  else if (rank === 2) pct = 0.50;
+  else if (rank === 3) pct = 0.25;
+  else if (rank === 4) pct = 0.10;
+  else if (rank === 5) pct = 0.07;
+  else if (rank >= 6 && rank <= 10) pct = 0.04;
+  else if (rank >= 11 && rank <= 100) pct = 0.02;
+  else if (rank >= 101 && rank <= 200) pct = 0.01;
+  else if (rank >= 201 && rank <= 300) pct = 0.005;
+  else if (rank >= 301 && rank <= 500) pct = 0.003;
+  else if (rank >= 501 && rank <= 750) pct = 0.0015;
+  else if (rank >= 751 && rank <= 1000) pct = 0.001;
+  else return 0;
+
+  const prize = parseFloat((r1 * pct).toFixed(2));
+  return prize >= MIN_PRIZE_AMOUNT ? prize : 0; // Return 0 if below minimum (triggers refund)
 }
 
 /**
@@ -230,7 +260,7 @@ async function calculateScores(tournamentId) {
 
   leaderboardEntries.forEach((entry, idx) => {
     entry.rank = idx + 1;
-    entry.prize_amount = calculatePrizeForRank(entry.rank, totalParticipants, totalPrizePool);
+    entry.prize_amount = calculatePrizeForRank(entry.rank, totalPrizePool);
   });
 
   if (leaderboardEntries.length > 0) {

@@ -15,6 +15,7 @@ const {
   BotWinHistory
 } = require('../db/models');
 const { calculateScores } = require('../services/scoring-engine');
+const { distributePrizes } = require('../services/prize-distribution');
 const sequelize = require('../db/index');
 const { Op } = require('sequelize');
 
@@ -111,6 +112,479 @@ async function validateTeamComposition(creatorIds, captainId, viceCaptainId, tou
   return { valid: errors.length === 0, errors, totalCredits };
 }
 
+// ─── CORE ENGINE FUNCTION: Deploy Pre-Contest Teams for All 1100 Bots ───
+async function deployPreContestBots(tournamentId) {
+  const tournament = await Tournament.findByPk(tournamentId);
+  if (!tournament) throw new Error(`Tournament not found: ${tournamentId}`);
+
+  console.log(`🤖 [BotManager Pre-Contest] Building pre-contest teams for 1100 bots in "${tournament.name}"...`);
+
+  const allBots = await User.findAll({
+    where: { is_bot: true },
+    order: [['created_at', 'ASC']]
+  });
+
+  if (allBots.length === 0) {
+    throw new Error('No registered bots found in database.');
+  }
+
+  const creators = await Creator.findAll({ where: { platform: tournament.platform } });
+  if (creators.length < config.TOTAL_TEAM_SIZE) {
+    throw new Error(`Not enough creators available for platform ${tournament.platform}`);
+  }
+
+  const catMap = {};
+  for (const c of creators) {
+    catMap[c.category] = catMap[c.category] || [];
+    catMap[c.category].push({
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      credit_cost: parseFloat(c.credit_cost)
+    });
+  }
+
+  const categories = config.CATEGORIES;
+
+  // Clear existing bot teams for this tournament
+  const botUserIds = allBots.map(b => b.id);
+  const oldTeams = await Team.findAll({
+    where: { tournament_id: tournamentId, user_id: botUserIds },
+    attributes: ['id']
+  });
+  if (oldTeams.length > 0) {
+    const otids = oldTeams.map(t => t.id);
+    await TeamCreator.destroy({ where: { team_id: otids } });
+    await Team.destroy({ where: { id: otids } });
+  }
+
+  const newTeamRecords = [];
+  const newTeamCreatorRecords = [];
+
+  for (let i = 0; i < allBots.length; i++) {
+    const bot = allBots[i];
+    const threeCat = categories[i % categories.length];
+
+    let selectedCreators = [];
+    let totalCredits = 0;
+
+    for (const cat of categories) {
+      const pool = [...(catMap[cat] || [])];
+      pool.sort(() => Math.random() - 0.5);
+      const count = cat === threeCat ? 3 : 2;
+      selectedCreators.push(...pool.slice(0, count));
+    }
+
+    totalCredits = selectedCreators.reduce((sum, c) => sum + c.credit_cost, 0);
+
+    // If budget exceeded, replace most expensive with cheaper
+    if (totalCredits > config.TOTAL_CREDITS) {
+      selectedCreators.sort((a, b) => b.credit_cost - a.credit_cost);
+      for (let j = 0; j < selectedCreators.length; j++) {
+        const cat = selectedCreators[j].category;
+        const cheaper = (catMap[cat] || []).filter(c => c.credit_cost < selectedCreators[j].credit_cost);
+        if (cheaper.length > 0) {
+          selectedCreators[j] = cheaper[0];
+          totalCredits = selectedCreators.reduce((sum, c) => sum + c.credit_cost, 0);
+          if (totalCredits <= config.TOTAL_CREDITS) break;
+        }
+      }
+    }
+
+    selectedCreators.sort(() => Math.random() - 0.5);
+    const captain = selectedCreators[0];
+    const viceCaptain = selectedCreators[1];
+
+    const teamId = uuidv4();
+    newTeamRecords.push({
+      id: teamId,
+      user_id: bot.id,
+      tournament_id: tournamentId,
+      captain_creator_id: captain.id,
+      vice_captain_creator_id: viceCaptain.id,
+      is_locked: 1,
+      total_credits_used: totalCredits
+    });
+
+    selectedCreators.forEach(c => {
+      newTeamCreatorRecords.push({
+        id: uuidv4(),
+        team_id: teamId,
+        creator_id: c.id
+      });
+    });
+  }
+
+  // Bulk insert in chunks
+  const CHUNK = 300;
+  for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
+    await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
+  }
+  for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
+    await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
+  }
+
+  await tournament.update({
+    current_participants: newTeamRecords.length
+  });
+
+  console.log(`✅ [BotManager Pre-Contest] ${newTeamRecords.length} bots entered into "${tournament.name}" before contest start.`);
+  return {
+    success: true,
+    totalTeams: newTeamRecords.length,
+    tournamentName: tournament.name
+  };
+}
+
+// ─── CORE ENGINE FUNCTION: Deploy Post-Contest Autonomous Rearrangement for 1100 Bots ───
+async function deployAutonomousBots(tournamentId) {
+  const tournament = await Tournament.findByPk(tournamentId);
+  if (!tournament) throw new Error(`Tournament not found: ${tournamentId}`);
+
+  console.log(`🤖 [BotManager Post-Contest] Rearranging 1100 bot teams by ranking for tournament: "${tournament.name}"...`);
+
+  // Lock tournament rankings while processing so frontend shows finalizing banner
+  await tournament.update({ rankings_finalized: false });
+
+  // 1. Fetch all registered bots (1100)
+  const allBots = await User.findAll({
+    where: { is_bot: true },
+    order: [['created_at', 'ASC']]
+  });
+
+  if (allBots.length === 0) {
+    throw new Error('No registered bots found in database.');
+  }
+
+  // 2. Anti-Monopoly & Fair Winner Rotation
+  const pastTop10 = await BotWinHistory.findAll({
+    where: { rank: { [Op.lte]: 10 } },
+    order: [['created_at', 'DESC']],
+    limit: 50
+  });
+  const recentWinnerBotIds = new Set(pastTop10.map(h => h.bot_user_id));
+
+  let eligibleForTop = allBots.filter(b => !recentWinnerBotIds.has(b.id));
+  if (eligibleForTop.length < 10) {
+    eligibleForTop = [...allBots];
+  }
+
+  eligibleForTop.sort(() => Math.random() - 0.5);
+  const top10Bots = eligibleForTop.slice(0, 10);
+  const top10Ids = new Set(top10Bots.map(b => b.id));
+
+  // Remaining bots distributed across ranking tiers (total 1100)
+  const remainingBots = allBots.filter(b => !top10Ids.has(b.id));
+  remainingBots.sort(() => Math.random() - 0.5);
+
+  // 1100 bots distributed across 6 tiers matching prize structure:
+  // Tier 1: Rank 1-10 (10 bots) - Rotated Top 10 winners
+  // Tier 2: Rank 11-100 (90 bots) - High Performers
+  // Tier 3: Rank 101-300 (200 bots) - Strong Performers
+  // Tier 4: Rank 301-600 (300 bots) - Mid Performers
+  // Tier 5: Rank 601-1000 (400 bots) - Lower Performers (within 1000 prize rank cutoff)
+  // Tier 6: Rank 1001-1100 (100 bots) - Underdogs / Refund Tier (rank 1001+)
+  const tier2Bots = remainingBots.slice(0, 90);
+  const tier3Bots = remainingBots.slice(90, 290);
+  const tier4Bots = remainingBots.slice(290, 590);
+  const tier5Bots = remainingBots.slice(590, 990);
+  const tier6Bots = remainingBots.slice(990);
+
+  // 3. Analyze creator delta growth for this tournament
+  const startSnaps = await CreatorStatsSnapshot.findAll({
+    where: { tournament_id: tournamentId, snapshot_type: 'start' }
+  });
+  const endSnaps = await CreatorStatsSnapshot.findAll({
+    where: { tournament_id: tournamentId, snapshot_type: 'end' }
+  });
+
+  const startMap = {};
+  startSnaps.forEach(s => { startMap[s.creator_id] = s; });
+
+  const endMap = {};
+  endSnaps.forEach(s => { endMap[s.creator_id] = s; });
+
+  const creators = await Creator.findAll({ where: { platform: tournament.platform } });
+
+  const catCreators = {};
+  for (const c of creators) {
+    catCreators[c.category] = catCreators[c.category] || [];
+    const s = startMap[c.id];
+    const e = endMap[c.id];
+    let deltaScore = 0;
+    if (s && e) {
+      const dv = Math.max(0, e.views - s.views);
+      const dl = Math.max(0, e.likes - s.likes);
+      const ds = Math.max(0, e.followers - s.followers);
+      deltaScore = (dv * 0.001) + (dl * 0.002) + (ds * 0.01);
+    } else {
+      deltaScore = (c.base_views * 0.00001) + (c.base_likes * 0.0001);
+    }
+    catCreators[c.category].push({
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      credit_cost: parseFloat(c.credit_cost),
+      deltaScore
+    });
+  }
+
+  // Sort creators by delta score descending in each category
+  for (const cat of Object.keys(catCreators)) {
+    catCreators[cat].sort((a, b) => b.deltaScore - a.deltaScore);
+  }
+
+  // Clear previous bot teams for this tournament
+  const botUserIds = allBots.map(b => b.id);
+  const oldTeams = await Team.findAll({
+    where: { tournament_id: tournamentId, user_id: botUserIds },
+    attributes: ['id']
+  });
+  if (oldTeams.length > 0) {
+    const otids = oldTeams.map(t => t.id);
+    await TeamCreator.destroy({ where: { team_id: otids } });
+    await Team.destroy({ where: { id: otids } });
+  }
+
+  const categories = config.CATEGORIES;
+  const newTeamRecords = [];
+  const newTeamCreatorRecords = [];
+
+  // Helper: Rearrange players, captain, and vice-captain for specific ranking tier
+  function buildRearrangedLineup(tierIndex, subIndex) {
+    const threeCat = categories[(tierIndex + subIndex) % categories.length];
+    const selected = [];
+
+    for (const cat of categories) {
+      const pool = [...(catCreators[cat] || [])];
+      const count = cat === threeCat ? 3 : 2;
+
+      if (tierIndex === 1) {
+        selected.push(...pool.slice(0, count));
+      } else if (tierIndex === 2) {
+        const topSlice = pool.slice(0, 3).sort(() => Math.random() - 0.5);
+        selected.push(...topSlice.slice(0, count));
+      } else if (tierIndex === 3) {
+        pool.sort(() => Math.random() - 0.5);
+        selected.push(...pool.slice(0, count));
+      } else if (tierIndex === 4) {
+        pool.sort(() => Math.random() - 0.5);
+        selected.push(...pool.slice(1, 1 + count));
+      } else if (tierIndex === 5) {
+        pool.reverse();
+        selected.push(...pool.slice(0, count));
+      } else {
+        pool.reverse();
+        selected.push(...pool.slice(0, count));
+      }
+    }
+
+    selected.sort((a, b) => b.deltaScore - a.deltaScore);
+
+    let captain, viceCaptain;
+    if (tierIndex === 1) {
+      if (subIndex === 0) {
+        captain = selected[0];
+        viceCaptain = selected[1];
+      } else {
+        captain = selected[subIndex % 2];
+        viceCaptain = selected[(subIndex % 2) + 1] || selected[2];
+      }
+    } else if (tierIndex === 2) {
+      const topPool = selected.slice(0, 3).sort(() => Math.random() - 0.5);
+      captain = topPool[0];
+      viceCaptain = topPool[1] || selected[1];
+    } else if (tierIndex === 3 || tierIndex === 4) {
+      const pool = selected.slice(0, 4).sort(() => Math.random() - 0.5);
+      captain = pool[0];
+      viceCaptain = pool[1] || selected[1];
+    } else {
+      captain = selected[selected.length - 1];
+      viceCaptain = selected[selected.length - 2] || selected[0];
+    }
+
+    const totalCredits = selected.reduce((sum, c) => sum + c.credit_cost, 0);
+    return { creators: selected, captain, viceCaptain, totalCredits };
+  }
+
+  // Build Tier 1 (Rank 1-10)
+  top10Bots.forEach((bot, idx) => {
+    const { creators: lineup, captain, viceCaptain, totalCredits } = buildRearrangedLineup(1, idx);
+    const teamId = uuidv4();
+    newTeamRecords.push({
+      id: teamId,
+      user_id: bot.id,
+      tournament_id: tournamentId,
+      captain_creator_id: captain.id,
+      vice_captain_creator_id: viceCaptain.id,
+      is_locked: 1,
+      total_credits_used: totalCredits
+    });
+    lineup.forEach(c => {
+      newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
+    });
+  });
+
+  // Build Tier 2 (Rank 11-100)
+  tier2Bots.forEach((bot, idx) => {
+    const { creators: lineup, captain, viceCaptain, totalCredits } = buildRearrangedLineup(2, idx);
+    const teamId = uuidv4();
+    newTeamRecords.push({
+      id: teamId,
+      user_id: bot.id,
+      tournament_id: tournamentId,
+      captain_creator_id: captain.id,
+      vice_captain_creator_id: viceCaptain.id,
+      is_locked: 1,
+      total_credits_used: totalCredits
+    });
+    lineup.forEach(c => {
+      newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
+    });
+  });
+
+  // Build Tier 3 (Rank 101-300)
+  tier3Bots.forEach((bot, idx) => {
+    const { creators: lineup, captain, viceCaptain, totalCredits } = buildRearrangedLineup(3, idx);
+    const teamId = uuidv4();
+    newTeamRecords.push({
+      id: teamId,
+      user_id: bot.id,
+      tournament_id: tournamentId,
+      captain_creator_id: captain.id,
+      vice_captain_creator_id: viceCaptain.id,
+      is_locked: 1,
+      total_credits_used: totalCredits
+    });
+    lineup.forEach(c => {
+      newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
+    });
+  });
+
+  // Build Tier 4 (Rank 301-600)
+  tier4Bots.forEach((bot, idx) => {
+    const { creators: lineup, captain, viceCaptain, totalCredits } = buildRearrangedLineup(4, idx);
+    const teamId = uuidv4();
+    newTeamRecords.push({
+      id: teamId,
+      user_id: bot.id,
+      tournament_id: tournamentId,
+      captain_creator_id: captain.id,
+      vice_captain_creator_id: viceCaptain.id,
+      is_locked: 1,
+      total_credits_used: totalCredits
+    });
+    lineup.forEach(c => {
+      newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
+    });
+  });
+
+  // Build Tier 5 (Rank 601-1000)
+  tier5Bots.forEach((bot, idx) => {
+    const { creators: lineup, captain, viceCaptain, totalCredits } = buildRearrangedLineup(5, idx);
+    const teamId = uuidv4();
+    newTeamRecords.push({
+      id: teamId,
+      user_id: bot.id,
+      tournament_id: tournamentId,
+      captain_creator_id: captain.id,
+      vice_captain_creator_id: viceCaptain.id,
+      is_locked: 1,
+      total_credits_used: totalCredits
+    });
+    lineup.forEach(c => {
+      newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
+    });
+  });
+
+  // Build Tier 6 (Rank 1001-1100 - Refund tier)
+  tier6Bots.forEach((bot, idx) => {
+    const { creators: lineup, captain, viceCaptain, totalCredits } = buildRearrangedLineup(6, idx);
+    const teamId = uuidv4();
+    newTeamRecords.push({
+      id: teamId,
+      user_id: bot.id,
+      tournament_id: tournamentId,
+      captain_creator_id: captain.id,
+      vice_captain_creator_id: viceCaptain.id,
+      is_locked: 1,
+      total_credits_used: totalCredits
+    });
+    lineup.forEach(c => {
+      newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
+    });
+  });
+
+  // Bulk save in chunks
+  const CHUNK = 300;
+  for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
+    await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
+  }
+  for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
+    await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
+  }
+
+  await tournament.update({
+    current_participants: newTeamRecords.length
+  });
+
+  // Recalculate official scores for all teams
+  console.log(`🧮 Calculating official leaderboard scores for ${tournament.name}...`);
+  await calculateScores(tournament.id);
+
+  // Record Top 10 in bot_win_history
+  const newLeaderboard = await Leaderboard.findAll({
+    where: { tournament_id: tournamentId },
+    order: [['rank', 'ASC']],
+    limit: 10
+  });
+
+  const winHistoryRecords = newLeaderboard.map(entry => ({
+    id: uuidv4(),
+    bot_user_id: entry.user_id,
+    tournament_id: tournamentId,
+    rank: entry.rank,
+    points: entry.total_points
+  }));
+  await BotWinHistory.bulkCreate(winHistoryRecords);
+
+  // Finalize rankings
+  await tournament.update({ rankings_finalized: true });
+
+  // Distribute prizes and ₹97 refunds (₹2 fee)
+  try {
+    await distributePrizes(tournamentId);
+  } catch (distErr) {
+    console.error('Error distributing prizes in bot manager:', distErr);
+  }
+
+  const topWinner = newLeaderboard[0];
+  const winnerUser = topWinner ? await User.findByPk(topWinner.user_id) : null;
+
+  console.log(`🏆 [BotManager] Contest finalized! Winner: "${winnerUser ? winnerUser.name : 'Bot'}" (Rank #1 with ${topWinner ? topWinner.total_points : 0} pts)`);
+
+  return {
+    success: true,
+    message: `Successfully executed 1100-Bot Autonomous Deployment with Fair Winner Rotation!`,
+    tournamentName: tournament.name,
+    totalTeams: newTeamRecords.length,
+    rankingsFinalized: true,
+    winner: {
+      botName: winnerUser ? winnerUser.name : 'Bot Winner',
+      rank: 1,
+      points: topWinner ? topWinner.total_points : 0,
+      prize: topWinner ? topWinner.prize_amount : 0
+    },
+    top10Lineup: newLeaderboard.map(e => ({
+      rank: e.rank,
+      userId: e.user_id,
+      points: e.total_points
+    }))
+  };
+}
+
+// ─── ROUTE ENDPOINTS ───
+
 // 1. GET /bot-manager/status — Overview of bot network & contests
 router.get('/status', async (req, res) => {
   try {
@@ -126,6 +600,7 @@ router.get('/status', async (req, res) => {
         botManagerApiKeyConfigured: true,
         specialPostContestAccess: 'ENABLED',
         fairRotationEngine: 'ACTIVE',
+        preContestAutoTeamCreation: 'ENABLED'
       },
       tournaments,
       timestamp: new Date().toISOString()
@@ -146,7 +621,7 @@ router.get('/schedule', async (req, res) => {
         start_time: { [Op.gt]: now }
       },
       order: [['start_time', 'ASC']],
-      limit: 3
+      limit: 5
     });
 
     const live = await Tournament.findAll({
@@ -191,21 +666,25 @@ router.get('/schedule', async (req, res) => {
   }
 });
 
-// 3. GET /bot-manager/bots — List all 300 registered bots
+// 3. GET /bot-manager/bots — List registered bots
 router.get('/bots', async (req, res) => {
   try {
+    const limit = parseInt(req.query.limit) || 1100;
     const bots = await User.findAll({
       where: { is_bot: true },
       attributes: ['id', 'name', 'email', 'role', 'created_at'],
       include: [
         { model: Wallet, as: 'wallet', attributes: ['balance'] }
       ],
-      order: [['created_at', 'ASC']]
+      order: [['created_at', 'ASC']],
+      limit
     });
+
+    const total = await User.count({ where: { is_bot: true } });
 
     res.json({
       success: true,
-      total: bots.length,
+      total,
       bots: bots.map(b => ({
         id: b.id,
         name: b.name,
@@ -218,7 +697,7 @@ router.get('/bots', async (req, res) => {
   }
 });
 
-// 4. GET /bot-manager/winners-history — List past bot winners to inspect rotation
+// 4. GET /bot-manager/winners-history — List past bot winners
 router.get('/winners-history', async (req, res) => {
   try {
     const history = await BotWinHistory.findAll({
@@ -226,7 +705,6 @@ router.get('/winners-history', async (req, res) => {
       limit: 50
     });
 
-    // Count wins per bot
     const winCounts = {};
     for (const h of history) {
       if (h.rank === 1) {
@@ -245,94 +723,55 @@ router.get('/winners-history', async (req, res) => {
   }
 });
 
-// 5. POST /bot-manager/create-team — SPECIAL ACCESS: Create team for individual bot
-router.post('/create-team', async (req, res) => {
+// 5. POST /bot-manager/deploy-pre-contest — All 1100 bots build pre-contest teams
+router.post('/deploy-pre-contest', async (req, res) => {
   try {
-    const { botUserId, tournamentId, creatorIds, captainId, viceCaptainId } = req.body;
-
-    if (!botUserId || !tournamentId || !creatorIds || !captainId || !viceCaptainId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required parameters: botUserId, tournamentId, creatorIds, captainId, viceCaptainId'
-      });
+    const { tournamentId } = req.body;
+    if (!tournamentId) {
+      return res.status(400).json({ success: false, error: 'tournamentId is required' });
     }
 
-    const botUser = await User.findByPk(botUserId);
-    if (!botUser || !botUser.is_bot) {
-      return res.status(403).json({ success: false, error: 'Target user is not a registered bot' });
-    }
-
-    const tournament = await Tournament.findByPk(tournamentId);
-    if (!tournament) {
-      return res.status(404).json({ success: false, error: 'Tournament not found' });
-    }
-
-    const validation = await validateTeamComposition(creatorIds, captainId, viceCaptainId, tournament.platform);
-    if (!validation.valid) {
-      return res.status(400).json({ success: false, error: 'Validation failed', details: validation.errors });
-    }
-
-    let team = await Team.findOne({
-      where: { user_id: botUserId, tournament_id: tournamentId }
-    });
-
-    const isUpdate = !!team;
-    if (!team) {
-      team = await Team.create({
-        id: uuidv4(),
-        user_id: botUserId,
-        tournament_id: tournamentId,
-        captain_creator_id: captainId,
-        vice_captain_creator_id: viceCaptainId,
-        is_locked: 1,
-        total_credits_used: validation.totalCredits
-      });
-    } else {
-      await team.update({
-        captain_creator_id: captainId,
-        vice_captain_creator_id: viceCaptainId,
-        total_credits_used: validation.totalCredits,
-        is_locked: 1
-      });
-      await TeamCreator.destroy({ where: { team_id: team.id } });
-    }
-
-    const teamCreatorRecords = creatorIds.map(cid => ({
-      id: uuidv4(),
-      team_id: team.id,
-      creator_id: cid
-    }));
-    await TeamCreator.bulkCreate(teamCreatorRecords);
-
-    if (!isUpdate) {
-      await tournament.increment('current_participants');
-    }
-
-    if (tournament.status === 'live' || tournament.status === 'completed') {
-      await calculateScores(tournament.id);
-    }
-
-    const entry = await Leaderboard.findOne({
-      where: { tournament_id: tournamentId, user_id: botUserId }
-    });
-
-    res.json({
-      success: true,
-      message: `Team successfully ${isUpdate ? 'updated' : 'created'} for bot ${botUser.name}`,
-      teamId: team.id,
-      botName: botUser.name,
-      tournamentStatus: tournament.status,
-      rank: entry ? entry.rank : null,
-      score: entry ? entry.total_points : null,
-      prizeAmount: entry ? entry.prize_amount : null
-    });
+    const result = await deployPreContestBots(tournamentId);
+    res.json(result);
   } catch (error) {
-    console.error('Bot team creation error:', error);
+    console.error('Error in deploy-pre-contest:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// 6. POST /bot-manager/batch-join — Command multiple bots to join
+// 6. POST /bot-manager/deploy-1100-autonomous — Master 1100-bot Post-Contest Rearrangement
+router.post('/deploy-1100-autonomous', async (req, res) => {
+  try {
+    const { tournamentId } = req.body;
+    if (!tournamentId) {
+      return res.status(400).json({ success: false, error: 'tournamentId is required' });
+    }
+
+    const result = await deployAutonomousBots(tournamentId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in deploy-1100-autonomous:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Backward compatibility alias for deploy-300-autonomous
+router.post('/deploy-300-autonomous', async (req, res) => {
+  try {
+    const { tournamentId } = req.body;
+    if (!tournamentId) {
+      return res.status(400).json({ success: false, error: 'tournamentId is required' });
+    }
+
+    const result = await deployAutonomousBots(tournamentId);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in deploy-300-autonomous alias:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 7. POST /bot-manager/batch-join — Command a specific number of bots to join
 router.post('/batch-join', async (req, res) => {
   try {
     const { tournamentId, botCount = 10 } = req.body;
@@ -437,342 +876,7 @@ router.post('/batch-join', async (req, res) => {
   }
 });
 
-// 7. POST /bot-manager/deploy-300-autonomous — ★★★ MASTER FAIR-ROTATION ENGINE ★★★
-// Commands all 300 bots to build teams with anti-monopoly fair rotation so that
-// every bot gets a chance to reach the top, and rankings look 100% natural & random!
-router.post('/deploy-300-autonomous', async (req, res) => {
-  try {
-    const { tournamentId } = req.body;
-
-    const tournament = await Tournament.findByPk(tournamentId);
-    if (!tournament) {
-      return res.status(404).json({ success: false, error: 'Tournament not found' });
-    }
-
-    console.log(`🤖 [BotManager] Initiating Autonomous 300-Bot Deployment for tournament: "${tournament.name}"...`);
-
-    // Lock tournament rankings while processing so frontend shows finalizing banner
-    await tournament.update({ rankings_finalized: false });
-
-    // 1. Fetch all 300 registered bots
-    const allBots = await User.findAll({
-      where: { is_bot: true },
-      order: [['created_at', 'ASC']]
-    });
-
-    if (allBots.length < 300) {
-      console.warn(`⚠️ Expected 300 bots, found ${allBots.length}. Using all available.`);
-    }
-
-    // 2. Fetch recent winners from bot_win_history to enforce rotation & anti-monopoly
-    const pastTop10 = await BotWinHistory.findAll({
-      where: { rank: { [Op.lte]: 10 } },
-      order: [['created_at', 'DESC']],
-      limit: 30
-    });
-    const recentWinnerBotIds = new Set(pastTop10.map(h => h.bot_user_id));
-
-    // Candidates for Tier 1 (Rank 1-10): bots that haven't won recently
-    let eligibleForTop = allBots.filter(b => !recentWinnerBotIds.has(b.id));
-    if (eligibleForTop.length < 10) {
-      eligibleForTop = [...allBots]; // fallback if all have won
-    }
-
-    // Shuffle eligible bots to pick this tournament's Top 10
-    eligibleForTop.sort(() => Math.random() - 0.5);
-    const top10Bots = eligibleForTop.slice(0, 10);
-    const top10Ids = new Set(top10Bots.map(b => b.id));
-
-    // Remaining bots for other tiers
-    const remainingBots = allBots.filter(b => !top10Ids.has(b.id));
-    remainingBots.sort(() => Math.random() - 0.5);
-
-    const tier2Bots = remainingBots.slice(0, 40);   // Rank 11-50
-    const tier3Bots = remainingBots.slice(40, 90);  // Rank 51-100
-    const tier4Bots = remainingBots.slice(90, 190); // Rank 101-200
-    const tier5Bots = remainingBots.slice(190);     // Rank 201-300
-
-    // 3. Analyze creator delta performance for this tournament
-    const startSnaps = await CreatorStatsSnapshot.findAll({
-      where: { tournament_id: tournamentId, snapshot_type: 'start' }
-    });
-    const endSnaps = await CreatorStatsSnapshot.findAll({
-      where: { tournament_id: tournamentId, snapshot_type: 'end' }
-    });
-
-    const startMap = {};
-    startSnaps.forEach(s => { startMap[s.creator_id] = s; });
-
-    const endMap = {};
-    endSnaps.forEach(s => { endMap[s.creator_id] = s; });
-
-    const creators = await Creator.findAll({ where: { platform: tournament.platform } });
-
-    // Score and rank creators in each category
-    const catCreators = {};
-    for (const c of creators) {
-      catCreators[c.category] = catCreators[c.category] || [];
-      const s = startMap[c.id];
-      const e = endMap[c.id];
-      let deltaScore = 0;
-      if (s && e) {
-        const dv = Math.max(0, e.views - s.views);
-        const dl = Math.max(0, e.likes - s.likes);
-        const ds = Math.max(0, e.followers - s.followers);
-        deltaScore = (dv * 0.001) + (dl * 0.002) + (ds * 0.01);
-      }
-      catCreators[c.category].push({
-        id: c.id,
-        name: c.name,
-        category: c.category,
-        credit_cost: parseFloat(c.credit_cost),
-        deltaScore
-      });
-    }
-
-    // Sort creators by delta score descending in each category
-    for (const cat of Object.keys(catCreators)) {
-      catCreators[cat].sort((a, b) => b.deltaScore - a.deltaScore);
-    }
-
-    // Clear previous bot teams for this tournament if any
-    const botUserIds = allBots.map(b => b.id);
-    const oldTeams = await Team.findAll({
-      where: { tournament_id: tournamentId, user_id: botUserIds },
-      attributes: ['id']
-    });
-    if (oldTeams.length > 0) {
-      const otids = oldTeams.map(t => t.id);
-      await TeamCreator.destroy({ where: { team_id: otids } });
-      await Team.destroy({ where: { id: otids } });
-    }
-
-    const categories = config.CATEGORIES;
-    const newTeamRecords = [];
-    const newTeamCreatorRecords = [];
-
-    // Helper: generate lineup based on tier
-    function buildLineupForTier(tierIndex, subIndex) {
-      const threeCat = categories[(tierIndex + subIndex) % categories.length];
-      const selected = [];
-
-      for (const cat of categories) {
-        const pool = [...catCreators[cat]];
-        const count = cat === threeCat ? 3 : 2;
-
-        if (tierIndex === 1) {
-          // Tier 1: Pick top performers
-          selected.push(...pool.slice(0, count));
-        } else if (tierIndex === 2) {
-          // Tier 2: Mostly top performers with 1 mid
-          const shuffledTop = pool.slice(0, 3).sort(() => Math.random() - 0.5);
-          selected.push(...shuffledTop.slice(0, count));
-        } else if (tierIndex === 3) {
-          // Tier 3: Balanced mix
-          pool.sort(() => Math.random() - 0.5);
-          selected.push(...pool.slice(0, count));
-        } else if (tierIndex === 4) {
-          // Tier 4: Average performers
-          pool.reverse();
-          pool.sort(() => Math.random() - 0.3);
-          selected.push(...pool.slice(0, count));
-        } else {
-          // Tier 5: Underdog performers
-          pool.reverse();
-          selected.push(...pool.slice(0, count));
-        }
-      }
-
-      // Sort selected by delta score to assign Captain and Vice-Captain
-      selected.sort((a, b) => b.deltaScore - a.deltaScore);
-
-      let captain, viceCaptain;
-      if (tierIndex === 1) {
-        // Rank 1 gets the absolute highest delta scorer as Captain
-        if (subIndex === 0) {
-          captain = selected[0];
-          viceCaptain = selected[1];
-        } else {
-          // Slight permutations for Rank 2-10
-          captain = selected[subIndex % 2];
-          viceCaptain = selected[(subIndex % 2) + 1] || selected[2];
-        }
-      } else {
-        // Random captain/VC from top 4 in their lineup
-        const topPool = selected.slice(0, 4).sort(() => Math.random() - 0.5);
-        captain = topPool[0];
-        viceCaptain = topPool[1] || selected[1];
-      }
-
-      const totalCredits = selected.reduce((sum, c) => sum + c.credit_cost, 0);
-      return { creators: selected, captain, viceCaptain, totalCredits };
-    }
-
-    // Build teams for Tier 1 (Rotated Top 10 Winners!)
-    top10Bots.forEach((bot, idx) => {
-      const { creators: lineup, captain, viceCaptain, totalCredits } = buildLineupForTier(1, idx);
-      const teamId = uuidv4();
-      newTeamRecords.push({
-        id: teamId,
-        user_id: bot.id,
-        tournament_id: tournamentId,
-        captain_creator_id: captain.id,
-        vice_captain_creator_id: viceCaptain.id,
-        is_locked: 1,
-        total_credits_used: totalCredits
-      });
-      lineup.forEach(c => {
-        newTeamCreatorRecords.push({
-          id: uuidv4(),
-          team_id: teamId,
-          creator_id: c.id
-        });
-      });
-    });
-
-    // Build teams for Tier 2 (Ranks 11-50)
-    tier2Bots.forEach((bot, idx) => {
-      const { creators: lineup, captain, viceCaptain, totalCredits } = buildLineupForTier(2, idx);
-      const teamId = uuidv4();
-      newTeamRecords.push({
-        id: teamId,
-        user_id: bot.id,
-        tournament_id: tournamentId,
-        captain_creator_id: captain.id,
-        vice_captain_creator_id: viceCaptain.id,
-        is_locked: 1,
-        total_credits_used: totalCredits
-      });
-      lineup.forEach(c => {
-        newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
-      });
-    });
-
-    // Build teams for Tier 3 (Ranks 51-100)
-    tier3Bots.forEach((bot, idx) => {
-      const { creators: lineup, captain, viceCaptain, totalCredits } = buildLineupForTier(3, idx);
-      const teamId = uuidv4();
-      newTeamRecords.push({
-        id: teamId,
-        user_id: bot.id,
-        tournament_id: tournamentId,
-        captain_creator_id: captain.id,
-        vice_captain_creator_id: viceCaptain.id,
-        is_locked: 1,
-        total_credits_used: totalCredits
-      });
-      lineup.forEach(c => {
-        newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
-      });
-    });
-
-    // Build teams for Tier 4 (Ranks 101-200)
-    tier4Bots.forEach((bot, idx) => {
-      const { creators: lineup, captain, viceCaptain, totalCredits } = buildLineupForTier(4, idx);
-      const teamId = uuidv4();
-      newTeamRecords.push({
-        id: teamId,
-        user_id: bot.id,
-        tournament_id: tournamentId,
-        captain_creator_id: captain.id,
-        vice_captain_creator_id: viceCaptain.id,
-        is_locked: 1,
-        total_credits_used: totalCredits
-      });
-      lineup.forEach(c => {
-        newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
-      });
-    });
-
-    // Build teams for Tier 5 (Ranks 201-300)
-    tier5Bots.forEach((bot, idx) => {
-      const { creators: lineup, captain, viceCaptain, totalCredits } = buildLineupForTier(5, idx);
-      const teamId = uuidv4();
-      newTeamRecords.push({
-        id: teamId,
-        user_id: bot.id,
-        tournament_id: tournamentId,
-        captain_creator_id: captain.id,
-        vice_captain_creator_id: viceCaptain.id,
-        is_locked: 1,
-        total_credits_used: totalCredits
-      });
-      lineup.forEach(c => {
-        newTeamCreatorRecords.push({ id: uuidv4(), team_id: teamId, creator_id: c.id });
-      });
-    });
-
-    // Bulk insert all 300 teams and relationships
-    console.log(`⚡ Bulk saving ${newTeamRecords.length} bot teams...`);
-    await Team.bulkCreate(newTeamRecords);
-    await TeamCreator.bulkCreate(newTeamCreatorRecords);
-
-    // Update participants count
-    await tournament.update({
-      current_participants: newTeamRecords.length
-    });
-
-    // Calculate official scores for the tournament
-    console.log(`🧮 Calculating official leaderboard scores for ${tournament.name}...`);
-    await calculateScores(tournament.id);
-
-    // Record new Top 10 into bot_win_history
-    const newLeaderboard = await Leaderboard.findAll({
-      where: { tournament_id: tournamentId },
-      order: [['rank', 'ASC']],
-      limit: 10
-    });
-
-    const winHistoryRecords = newLeaderboard.map(entry => ({
-      id: uuidv4(),
-      bot_user_id: entry.user_id,
-      tournament_id: tournamentId,
-      rank: entry.rank,
-      points: entry.total_points
-    }));
-    await BotWinHistory.bulkCreate(winHistoryRecords);
-
-    // ★★★ UNLOCK RANKINGS: Set rankings_finalized = true! ★★★
-    await tournament.update({ rankings_finalized: true });
-
-    // Distribute prize pool winnings to top ranks & 100% Never-Lose refunds (₹99) to non-winners
-    try {
-      const { distributePrizes } = require('../services/prize-distribution');
-      await distributePrizes(tournamentId);
-    } catch (distErr) {
-      console.error('Error distributing prizes in bot manager:', distErr);
-    }
-
-    const topWinner = newLeaderboard[0];
-    const winnerUser = await User.findByPk(topWinner.user_id);
-
-    console.log(`🏆 [BotManager] Contest finalized! Winner: "${winnerUser ? winnerUser.name : 'Bot'}" (Rank #1 with ${topWinner.total_points} pts)`);
-
-    res.json({
-      success: true,
-      message: `Successfully executed 300-Bot Autonomous Deployment with Fair Winner Rotation!`,
-      tournamentName: tournament.name,
-      totalTeams: newTeamRecords.length,
-      rankingsFinalized: true,
-      winner: {
-        botName: winnerUser ? winnerUser.name : 'Bot Winner',
-        rank: 1,
-        points: topWinner.total_points,
-        prize: topWinner.prize_amount
-      },
-      top10Lineup: newLeaderboard.map(e => ({
-        rank: e.rank,
-        userId: e.user_id,
-        points: e.total_points
-      }))
-    });
-  } catch (error) {
-    console.error('Error in deploy-300-autonomous:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// 8. POST /bot-manager/recalculate/:tournamentId — Trigger score recalculation
+// 8. POST /bot-manager/recalculate/:tournamentId — Recalculate scores
 router.post('/recalculate/:tournamentId', async (req, res) => {
   try {
     const { tournamentId } = req.params;
@@ -783,7 +887,7 @@ router.post('/recalculate/:tournamentId', async (req, res) => {
   }
 });
 
-// 9. GET /bot-manager/leaderboard/:tournamentId — Query leaderboard with API key
+// 9. GET /bot-manager/leaderboard/:tournamentId — Query leaderboard with bot tags
 router.get('/leaderboard/:tournamentId', async (req, res) => {
   try {
     const { tournamentId } = req.params;
@@ -797,7 +901,7 @@ router.get('/leaderboard/:tournamentId', async (req, res) => {
         { model: Team, attributes: ['id', 'captain_creator_id', 'vice_captain_creator_id', 'total_credits_used'] }
       ],
       order: [['rank', 'ASC']],
-      limit: 100
+      limit: 1200
     });
 
     res.json({
@@ -827,3 +931,5 @@ router.get('/leaderboard/:tournamentId', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.deployPreContestBots = deployPreContestBots;
+module.exports.deployAutonomousBots = deployAutonomousBots;

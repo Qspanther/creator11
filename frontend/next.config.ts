@@ -4,7 +4,7 @@ let rawBackendUrl = (process.env.BACKEND_URL || '').trim();
 
 // On Render or production, if BACKEND_URL is missing or private hostname, use public Render URL
 if (!rawBackendUrl || rawBackendUrl === 'creator11-backend' || rawBackendUrl === 'creator11-backend:10000') {
-  rawBackendUrl = process.env.NODE_ENV === 'production'
+  rawBackendUrl = (process.env.NODE_ENV === 'production' && process.env.RENDER)
     ? 'https://creator11-backend.onrender.com'
     : 'http://localhost:5000';
 } else if (!rawBackendUrl.startsWith('http://') && !rawBackendUrl.startsWith('https://')) {
@@ -18,6 +18,9 @@ if (!rawBackendUrl || rawBackendUrl === 'creator11-backend' || rawBackendUrl ===
 const backendUrl = rawBackendUrl.replace(/\/+$/, '');
 
 const nextConfig: NextConfig = {
+  turbopack: {
+    root: __dirname,
+  },
   allowedDevOrigins: [
     '*.trycloudflare.com',
     'localhost:3000',

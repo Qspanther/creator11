@@ -1,11 +1,11 @@
-﻿'use client';
+'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiPost } from '../lib/api';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { Mail, Lock, ShieldCheck, ArrowRight, KeyRound } from 'lucide-react';
+import { Mail, Lock, ShieldCheck, KeyRound, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -15,16 +15,28 @@ export default function ForgotPasswordPage() {
   const [newPassword, setNewPassword] = useState('');
   
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
+
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim()) return;
     setLoading(true);
     setError('');
+    setSuccessMsg('');
     try {
-      await apiPost('/auth/forgot-password', { email });
-      setSuccessMsg('OTP sent! Please check your email inbox.');
+      await apiPost('/auth/forgot-password', { email: email.trim() });
+      setSuccessMsg(`OTP sent to ${email.trim()}! Please check your inbox and spam folder.`);
+      setCooldown(30);
       setStep(2);
     } catch (err: any) {
       setError(err.message || 'Failed to send OTP');
@@ -33,14 +45,31 @@ export default function ForgotPasswordPage() {
     }
   };
 
+  const handleResendOtp = async () => {
+    if (cooldown > 0 || resending || !email.trim()) return;
+    setResending(true);
+    setError('');
+    setSuccessMsg('');
+    try {
+      await apiPost('/auth/forgot-password', { email: email.trim() });
+      setSuccessMsg(`Fresh password reset OTP sent to ${email.trim()}!`);
+      setCooldown(30);
+    } catch (err: any) {
+      setError(err.message || 'Failed to resend OTP');
+    } finally {
+      setResending(false);
+    }
+  };
+
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!otp.trim() || !newPassword) return;
     setLoading(true);
     setError('');
     try {
-      await apiPost('/auth/reset-password', { email, otp, newPassword });
+      await apiPost('/auth/reset-password', { email: email.trim(), otp: otp.trim(), newPassword });
       setSuccessMsg('Password reset successful! Redirecting to login...');
-      setTimeout(() => router.push('/login'), 2000);
+      setTimeout(() => router.push('/login'), 1500);
     } catch (err: any) {
       setError(err.message || 'Failed to reset password');
     } finally {
@@ -49,7 +78,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
+    <div className="min-h-screen flex items-center justify-center px-6 py-12">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
         
         <div className="glass p-8 glow-cyan">
@@ -59,11 +88,16 @@ export default function ForgotPasswordPage() {
           
           <h2 className="text-2xl font-bold mb-2 text-center">Reset Password</h2>
           <p className="text-sm text-text-secondary mb-6 text-center">
-            {step === 1 ? "Enter your email to receive an OTP" : "Enter the OTP sent to your email and set a new password"}
+            {step === 1 ? "Enter your email to receive an OTP" : `Enter the 6-digit OTP sent to ${email}`}
           </p>
 
-          {error && <div className="mb-4 p-3 rounded-xl bg-danger/10 text-sm text-danger text-center">{error}</div>}
-          {successMsg && <div className="mb-4 p-3 rounded-xl bg-success/10 text-sm text-success text-center">{successMsg}</div>}
+          {error && <div className="mb-4 p-3 rounded-xl bg-danger/10 text-xs text-danger text-center font-medium">{error}</div>}
+          {successMsg && (
+            <div className="mb-4 p-3 rounded-xl bg-success/10 text-xs text-success text-center font-medium flex items-center justify-center gap-2">
+              <CheckCircle2 size={15} className="shrink-0" />
+              <span>{successMsg}</span>
+            </div>
+          )}
 
           {step === 1 ? (
             <form onSubmit={handleRequestOtp} className="space-y-4">
@@ -80,48 +114,81 @@ export default function ForgotPasswordPage() {
               </div>
               <motion.button
                 type="submit" disabled={loading} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                className="w-full py-3 text-sm font-bold bg-neon-cyan text-black rounded-xl"
+                className="w-full py-3 text-sm font-bold bg-neon-cyan text-black rounded-xl cursor-pointer disabled:opacity-50"
               >
-                {loading ? 'Sending OTP...' : 'Send OTP'}
+                {loading ? 'Sending OTP...' : 'Send Reset OTP'}
               </motion.button>
             </form>
           ) : (
             <form onSubmit={handleResetPassword} className="space-y-4">
-              <div className="relative">
-                <ShieldCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
-                <input
-                  type="text"
-                  placeholder="Enter 6-digit OTP"
-                  value={otp}
-                  onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  required
-                  maxLength={6}
-                  className="w-full !pl-10 font-mono tracking-widest"
-                />
+              <div>
+                <label className="block text-xs text-text-muted mb-1 font-semibold uppercase tracking-wider">
+                  6-Digit OTP
+                </label>
+                <div className="relative">
+                  <ShieldCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={otp}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                    maxLength={6}
+                    autoFocus
+                    className="w-full !pl-10 font-mono tracking-widest text-lg"
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
-                <input
-                  type="password"
-                  placeholder="New Password"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  required
-                  className="w-full !pl-10"
-                />
+
+              <div>
+                <label className="block text-xs text-text-muted mb-1 font-semibold uppercase tracking-wider">
+                  New Password
+                </label>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
+                  <input
+                    type="password"
+                    placeholder="At least 6 characters"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full !pl-10"
+                  />
+                </div>
               </div>
+
               <motion.button
-                type="submit" disabled={loading} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                className="w-full py-3 text-sm font-bold bg-neon-cyan text-black rounded-xl"
+                type="submit" disabled={loading || otp.length !== 6 || newPassword.length < 6} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                className="w-full py-3 text-sm font-bold bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-xl cursor-pointer disabled:opacity-50"
               >
-                {loading ? 'Resetting...' : 'Reset Password'}
+                {loading ? 'Resetting Password...' : 'Save New Password'}
               </motion.button>
+
+              <div className="flex items-center justify-between pt-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="text-text-muted hover:text-white transition"
+                >
+                  ← Change Email
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={cooldown > 0 || resending}
+                  className="text-neon-cyan hover:underline disabled:text-text-muted disabled:no-underline flex items-center gap-1 transition"
+                >
+                  <RefreshCw size={12} className={resending ? 'animate-spin' : ''} />
+                  {resending ? 'Sending...' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend OTP'}
+                </button>
+              </div>
             </form>
           )}
 
-          <div className="text-center mt-6">
-            <Link href="/login" className="text-sm text-text-muted hover:text-white transition-colors">
-              Back to Login
+          <div className="text-center mt-6 pt-4 border-t border-white/10">
+            <Link href="/login" className="text-xs text-text-muted hover:text-white transition-colors">
+              Remember your password? Log In
             </Link>
           </div>
         </div>

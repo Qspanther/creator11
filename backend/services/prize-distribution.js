@@ -99,6 +99,8 @@ async function distributePrizes(tournamentId) {
 
   // Rank 1 prize is the admin-set prize_pool — passed through as-is
   const rank1Prize = parseFloat(tournament.prize_pool) || 0;
+  const entryFee = parseFloat(tournament.entry_fee) !== undefined && !isNaN(parseFloat(tournament.entry_fee)) ? parseFloat(tournament.entry_fee) : 99.00;
+  const calculatedRefund = Math.max(0, entryFee - PLATFORM_FEE);
 
   const t = await sequelize.transaction();
 
@@ -148,14 +150,14 @@ async function distributePrizes(tournamentId) {
       } else {
         // ── REFUND PATH ─────────────────────────────────────────────────
         // Calculated prize < ₹100 (or rank > 1000) → ₹97 refund, ₹2 platform fee retained
-        const newBalance = currentBalance + REFUND_AMOUNT;
+        const newBalance = currentBalance + calculatedRefund;
         await wallet.update({ balance: newBalance }, { transaction: t });
 
         // Credit ₹97 refund transaction
         await Transaction.create({
           wallet_id: wallet.id,
           type: 'refund',
-          amount: REFUND_AMOUNT,
+          amount: calculatedRefund,
           status: 'completed',
           reference_tournament_id: tournamentId,
           description: `Entry Refund - Rank #${entry.rank} in ${tournament.name} (₹2 platform fee deducted)`,
@@ -172,12 +174,12 @@ async function distributePrizes(tournamentId) {
         }, { transaction: t });
 
         // Record refund amount on leaderboard entry for transparency
-        await entry.update({ prize_amount: REFUND_AMOUNT }, { transaction: t });
+        await entry.update({ prize_amount: calculatedRefund }, { transaction: t });
 
         await Notification.create({
           user_id: entry.user_id,
-          title: '🛡️ ₹97 Refunded • ₹2 Platform Fee',
-          message: `Rank #${entry.rank} in "${tournament.name}". Your ₹99 entry fee has been processed: ₹97 refunded to your wallet (₹2 platform fee deducted).`,
+          title: `🛡️ ₹${calculatedRefund.toFixed(0)} Refunded • ₹2 Platform Fee`,
+          message: `Rank #${entry.rank} in "${tournament.name}". Your ₹${entryFee.toFixed(0)} entry fee has been processed: ₹${calculatedRefund.toFixed(0)} refunded to your wallet (₹2 platform fee deducted).`,
           type: 'contest_refund',
         }, { transaction: t }).catch(() => null);
 

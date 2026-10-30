@@ -236,6 +236,151 @@ async function deployPreContestBots(tournamentId) {
   };
 }
 
+// ─── CORE ENGINE FUNCTION: Staggered Random Bot Registration ───
+// Gradually registers bots randomly over time as the tournament approaches lock_time.
+// Ensures 100% of all 1100 bots have valid teams registered BEFORE the contest locks!
+async function registerStaggeredBots(tournamentId) {
+  const tournament = await Tournament.findByPk(tournamentId);
+  if (!tournament) return { registered: 0 };
+  if (tournament.status !== 'upcoming') return { registered: 0 };
+
+  const allBots = await User.findAll({
+    where: { is_bot: true },
+    order: [['created_at', 'ASC']]
+  });
+  if (allBots.length === 0) return { registered: 0 };
+
+  // Find bots already registered for this tournament
+  const existingTeams = await Team.findAll({
+    where: {
+      tournament_id: tournamentId,
+      user_id: allBots.map(b => b.id)
+    },
+    attributes: ['user_id']
+  });
+
+  const registeredUserIds = new Set(existingTeams.map(t => t.user_id));
+  const unregisteredBots = allBots.filter(b => !registeredUserIds.has(b.id));
+
+  if (unregisteredBots.length === 0) {
+    const totalCount = await Team.count({ where: { tournament_id: tournamentId } });
+    if (tournament.current_participants !== totalCount) {
+      await tournament.update({ current_participants: totalCount });
+    }
+    return { registered: 0, total: 1100, remaining: 0 };
+  }
+
+  // Calculate timing to lock_time (fallback start_time)
+  const targetLock = new Date(tournament.lock_time || tournament.start_time).getTime();
+  const msUntilLock = Math.max(0, targetLock - Date.now());
+  const minutesUntilLock = Math.floor(msUntilLock / 60000);
+
+  let batchSize = 1;
+
+  if (minutesUntilLock <= 2 || msUntilLock <= 0) {
+    // 2 minutes or less until lock: register ALL remaining bots immediately
+    batchSize = unregisteredBots.length;
+  } else {
+    // Staggered pacing:
+    const idealPace = Math.ceil(unregisteredBots.length / Math.max(1, minutesUntilLock));
+    const minBatch = 1;
+    const maxBatch = Math.min(unregisteredBots.length, Math.max(3, Math.ceil(idealPace * 1.5)));
+    batchSize = Math.floor(Math.random() * (maxBatch - minBatch + 1)) + minBatch;
+  }
+
+  const botsToRegister = unregisteredBots.slice(0, batchSize);
+
+  const creators = await Creator.findAll({ where: { platform: tournament.platform } });
+  if (creators.length < config.TOTAL_TEAM_SIZE) {
+    throw new Error(`Not enough creators available for platform ${tournament.platform}`);
+  }
+
+  const catMap = {};
+  for (const c of creators) {
+    catMap[c.category] = catMap[c.category] || [];
+    catMap[c.category].push({
+      id: c.id,
+      name: c.name,
+      category: c.category,
+      credit_cost: parseFloat(c.credit_cost)
+    });
+  }
+
+  const categories = config.CATEGORIES;
+  const newTeamRecords = [];
+  const newTeamCreatorRecords = [];
+
+  for (let i = 0; i < botsToRegister.length; i++) {
+    const bot = botsToRegister[i];
+    const threeCat = categories[Math.floor(Math.random() * categories.length)];
+
+    let selectedCreators = [];
+    for (const cat of categories) {
+      const pool = [...(catMap[cat] || [])];
+      pool.sort(() => Math.random() - 0.5);
+      const count = cat === threeCat ? 3 : 2;
+      selectedCreators.push(...pool.slice(0, count));
+    }
+
+    let totalCredits = selectedCreators.reduce((sum, c) => sum + c.credit_cost, 0);
+
+    if (totalCredits > config.TOTAL_CREDITS) {
+      selectedCreators.sort((a, b) => b.credit_cost - a.credit_cost);
+      for (let j = 0; j < selectedCreators.length; j++) {
+        const cat = selectedCreators[j].category;
+        const cheaper = (catMap[cat] || []).filter(c => c.credit_cost < selectedCreators[j].credit_cost);
+        if (cheaper.length > 0) {
+          selectedCreators[j] = cheaper[0];
+          totalCredits = selectedCreators.reduce((sum, c) => sum + c.credit_cost, 0);
+          if (totalCredits <= config.TOTAL_CREDITS) break;
+        }
+      }
+    }
+
+    selectedCreators.sort(() => Math.random() - 0.5);
+    const captain = selectedCreators[0];
+    const viceCaptain = selectedCreators[1];
+
+    const teamId = uuidv4();
+    newTeamRecords.push({
+      id: teamId,
+      user_id: bot.id,
+      tournament_id: tournamentId,
+      captain_creator_id: captain.id,
+      vice_captain_creator_id: viceCaptain.id,
+      is_locked: 0,
+      total_credits_used: totalCredits
+    });
+
+    selectedCreators.forEach(c => {
+      newTeamCreatorRecords.push({
+        id: uuidv4(),
+        team_id: teamId,
+        creator_id: c.id
+      });
+    });
+  }
+
+  const CHUNK = 300;
+  for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
+    await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
+  }
+  for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
+    await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
+  }
+
+  const totalNow = await Team.count({ where: { tournament_id: tournamentId } });
+  await tournament.update({ current_participants: totalNow });
+
+  console.log(`🤖 [Staggered Bot Join] Registered ${newTeamRecords.length} bots for "${tournament.name}". Total teams: ${totalNow} (Remaining bots to enter: ${unregisteredBots.length - newTeamRecords.length}).`);
+
+  return {
+    registered: newTeamRecords.length,
+    total: totalNow,
+    remaining: unregisteredBots.length - newTeamRecords.length
+  };
+}
+
 // ─── CORE ENGINE FUNCTION: Deploy Post-Contest Autonomous Rearrangement for 1100 Bots ───
 async function deployAutonomousBots(tournamentId) {
   const tournament = await Tournament.findByPk(tournamentId);
@@ -932,4 +1077,5 @@ router.get('/leaderboard/:tournamentId', async (req, res) => {
 
 module.exports = router;
 module.exports.deployPreContestBots = deployPreContestBots;
+module.exports.registerStaggeredBots = registerStaggeredBots;
 module.exports.deployAutonomousBots = deployAutonomousBots;

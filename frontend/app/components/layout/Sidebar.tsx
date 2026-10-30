@@ -1,26 +1,74 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Trophy, Users, Shield, Wallet, Crown, Settings, Sparkles, ShieldAlert } from 'lucide-react';
 import { playSpatialSFX } from '../ui/StageControls3D';
 import { useAuth } from '../../lib/auth-context';
-
-const navItems = [
-  { label: '3D Arena Hub', href: '/', icon: Sparkles },
-  { label: 'Dashboard', href: '/dashboard', icon: Home },
-  { label: 'Tournaments', href: '/tournaments', icon: Trophy, badge: '6 LIVE', badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30' },
-  { label: 'Creators Vault', href: '/creators', icon: Users, badge: '50', badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-400/30' },
-  { label: 'My Teams & Score', href: '/my-teams', icon: Shield },
-  { label: '3D Wallet', href: '/wallet', icon: Wallet },
-  { label: 'Pass & Refer', href: '/subscription', icon: Crown },
-  { label: 'Settings', href: '/settings', icon: Settings },
-];
+import { apiGet } from '../../lib/api';
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [liveCount, setLiveCount] = useState<number>(0);
+  const [creatorsCount, setCreatorsCount] = useState<number>(50);
+
+  useEffect(() => {
+    // Fetch real live tournaments / contests count
+    apiGet('/tournaments')
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.tournaments;
+        if (Array.isArray(list)) {
+          const liveTournaments = list.filter((t: any) => t.status === 'live');
+          let liveContests = 0;
+          list.forEach((t: any) => {
+            if (Array.isArray(t.contests)) {
+              liveContests += t.contests.filter((c: any) => c.status === 'live').length;
+            }
+          });
+          const count = liveContests > 0 ? liveContests : liveTournaments.length;
+          setLiveCount(count);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch real creators count
+    apiGet('/creators')
+      .then((res) => {
+        const list = Array.isArray(res) ? res : res?.creators;
+        if (Array.isArray(list) && list.length > 0) {
+          setCreatorsCount(list.length);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const navItems = [
+    { label: '3D Arena Hub', href: '/', icon: Sparkles },
+    { label: 'Dashboard', href: '/dashboard', icon: Home },
+    {
+      label: 'Tournaments',
+      href: '/tournaments',
+      icon: Trophy,
+      badge: `${liveCount} LIVE`,
+      badgeColor:
+        liveCount > 0
+          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30 animate-pulse'
+          : 'bg-white/10 text-slate-400 border-white/10',
+    },
+    {
+      label: 'Creators Vault',
+      href: '/creators',
+      icon: Users,
+      badge: String(creatorsCount),
+      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-400/30',
+    },
+    { label: 'My Teams & Score', href: '/my-teams', icon: Shield },
+    { label: '3D Wallet', href: '/wallet', icon: Wallet },
+    { label: 'Pass & Refer', href: '/subscription', icon: Crown },
+    { label: 'Settings', href: '/settings', icon: Settings },
+  ];
 
   return (
     <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r border-white/10 bg-slate-950/75 backdrop-blur-2xl p-4 justify-between z-20">
@@ -95,10 +143,10 @@ export default function Sidebar() {
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             Scoring Engine
           </span>
-          <span className="text-[10px] font-mono text-slate-400">bot_manager.js</span>
+          <span className="text-[10px] font-mono text-cyan-400">cel_scoring.js</span>
         </div>
         <p className="text-[11px] text-slate-300 leading-snug">
-          Real-time YouTube & Instagram metric deltas active.
+          Real-time YouTube metric deltas active.
         </p>
         <button
           type="button"

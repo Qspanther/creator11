@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
@@ -86,11 +86,11 @@ app.get('/health', (req, res) => {
 // YouTube Live Tracker status & manual sync endpoints
 const { startYouTubeTracker, syncNow, getStatus } = require('./services/youtubeSyncService');
 
-app.get('/admin/youtube-tracker/status', (req, res) => {
+app.get('/admin/youtube-tracker/status', authenticate, isAdmin, (req, res) => {
   res.json({ success: true, tracker: getStatus() });
 });
 
-app.post('/admin/youtube-tracker/sync', async (req, res) => {
+app.post('/admin/youtube-tracker/sync', authenticate, isAdmin, async (req, res) => {
   try {
     const result = await syncNow();
     res.json(result);

@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticate, optionalAuthenticate } = require('../middleware/auth');
-const { Tournament } = require('../db/models');
+const { Tournament, Contest } = require('../db/models');
 const { Op } = require('sequelize');
 
 const router = express.Router();
@@ -16,6 +16,7 @@ router.get('/', optionalAuthenticate, async (req, res) => {
 
     const tournaments = await Tournament.findAll({
       where,
+      include: [{ model: Contest, as: 'contests' }],
       order: [['start_time', 'ASC']],
     });
 
@@ -52,6 +53,18 @@ router.get('/:id/contests', optionalAuthenticate, async (req, res) => {
   } catch (error) {
     console.error('Error fetching contests:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /tournaments/:id/creators-performance — Get all creators' live performance for this league
+router.get('/:id/creators-performance', optionalAuthenticate, async (req, res) => {
+  try {
+    const { getTournamentCreatorsPerformance } = require('../services/scoring-engine');
+    const performance = await getTournamentCreatorsPerformance(req.params.id);
+    res.json(performance);
+  } catch (error) {
+    console.error('Error fetching creators performance:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
 

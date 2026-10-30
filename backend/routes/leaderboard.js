@@ -1,11 +1,11 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { Leaderboard, Team, User, Tournament } = require('../db/models');
-const { calculateScores } = require('../services/scoring-engine');
+const { calculateScores, getTournamentCreatorsPerformance } = require('../services/scoring-engine');
 
 const router = express.Router();
 
-// GET /leaderboard/:tournamentId — Get tournament leaderboard (Top 1200 participants)
+// GET /leaderboard/:tournamentId — Get tournament leaderboard (Top 1200 participants) + Creators Performance
 router.get('/:tournamentId', authenticate, async (req, res) => {
   try {
     const tournamentId = req.params.tournamentId;
@@ -49,8 +49,16 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
       }
     }
 
+    // Fetch live creators performance strictly for this tournament
+    const creatorsPerformance = await getTournamentCreatorsPerformance(tournamentId).catch(err => {
+      console.error('Error fetching creators performance:', err);
+      return [];
+    });
+
     const userEntry = entries.find(e => e.user_id === req.userId);
     const canViewTeams = true; // Transparency: users can inspect any participant's team in live or completed contests
+    const entryFee = parseFloat(tournament.entry_fee) || 99;
+    const standardRefund = Math.max(0, entryFee - 2);
 
     res.json({
       tournament: {
@@ -62,7 +70,7 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
         endTime: tournament.end_time,
         lockTime: tournament.lock_time,
         prizePool: parseFloat(tournament.prize_pool) || 0,
-        entryFee: parseFloat(tournament.entry_fee) || 0,
+        entryFee: entryFee,
         currentParticipants: tournament.current_participants || entries.length,
         rankingsFinalized: tournament.rankings_finalized !== false && tournament.rankings_finalized !== 0,
       },
@@ -78,12 +86,14 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
           userEmail: e.user_id === req.userId ? (e.user ? e.user.email : '') : undefined,
           totalPoints: parseFloat(e.total_points),
           prizeAmount: prizeAmt,
+          refundAmount: isRefund ? (prizeAmt > 0 ? prizeAmt : standardRefund) : 0,
           isRefund,
           platformFee: isRefund ? 2 : 0,
           isCurrentUser: e.user_id === req.userId,
           canViewTeam: true,
         };
       }),
+      creatorsPerformance,
       userRank: userEntry ? userEntry.rank : null,
       userPoints: userEntry ? parseFloat(userEntry.total_points) : null,
       userPrize: userEntry ? parseFloat(userEntry.prize_amount || 0) : 0,

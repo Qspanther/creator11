@@ -164,21 +164,19 @@ router.post('/', authenticate, async (req, res) => {
       }
 
       const balance = parseFloat(wallet.balance) || 0;
-      const entryFee = 99.00; // Strictly ₹99 INR for all tournaments
+      const tournamentFee = parseFloat(tournament.entry_fee);
+      const entryFee = (!isNaN(tournamentFee) && tournamentFee >= 0) ? tournamentFee : 99.00;
 
-      if (balance < entryFee) {
+      if (entryFee > 0 && balance < entryFee) {
         await t.rollback();
         return res.status(400).json({
-          error: `Insufficient wallet balance. ₹99.00 is required to lock and enter this contest, but your wallet balance is ₹${balance.toFixed(2)}.`,
+          error: `Insufficient wallet balance. ₹${entryFee.toFixed(2)} is required to lock and enter this contest, but your wallet balance is ₹${balance.toFixed(2)}.`,
           requiresDeposit: true,
-          requiredAmount: 99.00,
+          requiredAmount: entryFee,
           currentBalance: balance,
-          redirectTo: '/wallet?required=99'
+          redirectTo: `/wallet?required=${Math.ceil(entryFee)}`
         });
-      }
-
-      // Deduct entry fee
-      await wallet.update({ balance: balance - entryFee }, { transaction: t });
+      };
 
       // Create entry fee transaction
       await Transaction.create({
@@ -187,7 +185,7 @@ router.post('/', authenticate, async (req, res) => {
         amount: -entryFee,
         status: 'completed',
         reference_tournament_id: tournamentId,
-        description: `Entry fee (₹99.00) for ${tournament.name}`,
+        description: `Entry fee (₹${entryFee.toFixed(2)}) for ${tournament.name}`,
       }, { transaction: t });
 
       // Create team

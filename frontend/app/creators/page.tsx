@@ -23,6 +23,13 @@ interface Creator {
   latest_video_url?: string;
 }
 
+const formatIndianCount = (val: number | string | undefined) => {
+  if (val === undefined || val === null) return '0';
+  const num = typeof val === 'string' ? parseFloat(val) : val;
+  if (isNaN(num)) return '0';
+  return Math.round(num).toLocaleString('en-IN');
+};
+
 export default function CreatorsVaultPage3D() {
   const { token } = useAuth();
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -70,7 +77,7 @@ export default function CreatorsVaultPage3D() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search creators..."
-              className="pl-9 pr-3 py-2 bg-slate-900/90 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
+              className="!pl-9 pr-3 py-2 bg-slate-900/90 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
             />
           </div>
 
@@ -149,14 +156,14 @@ export default function CreatorsVaultPage3D() {
                   <div className="grid grid-cols-2 gap-2 text-center p-2.5 rounded-xl bg-black/40 border border-white/10 text-xs">
                     <div>
                       <div className="text-[10px] text-slate-400">Base Views</div>
-                      <div className="font-bold text-white font-mono">
-                        {((c.base_views || 950000) / 1000000).toFixed(2)}M
+                      <div className="font-bold text-white font-mono text-[11px] truncate" title={formatIndianCount(c.base_views)}>
+                        {formatIndianCount(c.base_views)}
                       </div>
                     </div>
                     <div>
                       <div className="text-[10px] text-slate-400">Base Likes</div>
-                      <div className="font-bold text-cyan-300 font-mono">
-                        {((c.base_likes || 82000) / 1000).toFixed(1)}K
+                      <div className="font-bold text-cyan-300 font-mono text-[11px] truncate" title={formatIndianCount(c.base_likes)}>
+                        {formatIndianCount(c.base_likes)}
                       </div>
                     </div>
                   </div>
@@ -201,19 +208,19 @@ export default function CreatorsVaultPage3D() {
               <div className="p-3 rounded-xl bg-black/50 border border-white/10">
                 <div className="text-[10px] text-slate-400 uppercase">Subscribers</div>
                 <div className="text-base font-black text-white font-mono mt-1">
-                  {((modalCreator.base_followers || 500000) / 1000).toFixed(0)}K
+                  {formatIndianCount(modalCreator.base_followers)}
                 </div>
               </div>
               <div className="p-3 rounded-xl bg-black/50 border border-white/10">
                 <div className="text-[10px] text-slate-400 uppercase">Total Views</div>
                 <div className="text-base font-black text-emerald-400 font-mono mt-1">
-                  {((modalCreator.base_views || 950000) / 1000000).toFixed(2)}M
+                  {formatIndianCount(modalCreator.base_views)}
                 </div>
               </div>
               <div className="p-3 rounded-xl bg-black/50 border border-white/10">
                 <div className="text-[10px] text-slate-400 uppercase">Total Likes</div>
                 <div className="text-base font-black text-cyan-300 font-mono mt-1">
-                  {((modalCreator.base_likes || 82000) / 1000).toFixed(1)}K
+                  {formatIndianCount(modalCreator.base_likes)}
                 </div>
               </div>
             </div>

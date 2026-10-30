@@ -621,7 +621,7 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
                         {isVC && <span className="text-[9px] px-1 bg-purple-400 text-slate-950 font-bold rounded">VC</span>}
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono">
-                        {creator.category} • {((creator.base_views || 950000) / 1000000).toFixed(1)}M Views
+                        {creator.category} • {Number(creator.base_views || 0).toLocaleString('en-IN')} Views
                       </div>
                     </div>
                   </div>

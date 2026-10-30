@@ -1,25 +1,43 @@
 # Dependencies
-**/node_modules/
+node_modules/
+.pnp
+.pnp.js
 
-# Next.js build/cache
-**/.next/
-
-# Build output
-dist/
-build/
-
-# Environment
+# Environment variables & secrets (CRITICAL: ECC security practice)
 .env
-**/.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.pem
+*.key
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+backend/creator11.sqlite
+
+# Next.js build
+.next/
+out/
+build/
+dist/
 
 # Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 *.log
 
-# Python
-**/__pycache__/
+# Python cache
+__pycache__/
 *.py[cod]
+*$py.class
 
-# SQLite temp/journals
-*.sqlite-journal
-*.sqlite-wal
-*.sqlite-shm
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

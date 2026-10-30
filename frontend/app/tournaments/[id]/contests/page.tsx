@@ -177,15 +177,26 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
             <p className="font-bold">{userTeams.length} Created</p>
           </div>
         </div>
-        <Link href={`/team-builder/${id}`}>
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
-          >
-            <UserPlus size={16} /> Create Team
-          </motion.button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href={`/leaderboard/${id}`}>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="px-3.5 py-2 bg-neon-purple/20 border border-neon-purple/40 hover:bg-neon-purple/30 text-neon-purple rounded-lg text-sm font-bold flex items-center gap-1.5 transition-colors"
+            >
+              <Trophy size={15} /> Live Dashboard
+            </motion.button>
+          </Link>
+          <Link href={`/team-builder/${id}`}>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
+            >
+              <UserPlus size={16} /> Create Team
+            </motion.button>
+          </Link>
+        </div>
       </div>
 
       {contests.length === 0 ? (

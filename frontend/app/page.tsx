@@ -13,13 +13,13 @@ const FALLBACK_TOURNAMENTS = [
 ];
 
 export default function LandingPage3D() {
-  const [tournaments, setTournaments] = useState<any[]>(FALLBACK_TOURNAMENTS);
+  const [tournaments, setTournaments] = useState<any[]>([]);
 
   useEffect(() => {
     apiGet('/tournaments')
       .then((res) => {
         const list = Array.isArray(res) ? res : res?.tournaments;
-        if (Array.isArray(list) && list.length > 0) setTournaments(list.slice(0, 3));
+        if (Array.isArray(list)) setTournaments(list.slice(0, 3));
       })
       .catch(() => {});
   }, []);
@@ -115,11 +115,11 @@ export default function LandingPage3D() {
               <div className="grid grid-cols-3 gap-2.5 text-center">
                 <div className="p-2.5 rounded-xl bg-black/45 border border-white/10">
                   <div className="text-[11px] text-slate-400">Views Delta</div>
-                  <div className="text-sm font-black text-emerald-400">+1.84M</div>
+                  <div className="text-sm font-black text-emerald-400">+18,40,000</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/45 border border-white/10">
                   <div className="text-[11px] text-slate-400">Likes Surge</div>
-                  <div className="text-sm font-black text-cyan-300">+142.8K</div>
+                  <div className="text-sm font-black text-cyan-300">+1,42,800</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/45 border border-white/10">
                   <div className="text-[11px] text-slate-400">2x Fantasy Pts</div>
@@ -183,42 +183,51 @@ export default function LandingPage3D() {
         <div className="flex items-center justify-between">
           <h2 className="text-2xl sm:text-3xl font-extrabold">Featured 3D Creator Cups</h2>
           <Link href="/tournaments" className="text-cyan-400 hover:underline text-sm font-bold">
-            View All 6 Tournaments →
+            View All Tournaments →
           </Link>
         </div>
-        <div className="grid md:grid-cols-3 gap-6">
-          {tournaments.map((t) => (
-            <TiltCard3D key={t.id} className="p-6 flex flex-col justify-between space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-purple-500/20 text-purple-300 border border-purple-400/30">
-                    {t.platform} • {t.duration_type}
-                  </span>
-                  <span className="text-xs font-bold text-emerald-400 uppercase">● {t.status}</span>
-                </div>
-                <h3 className="text-xl font-black text-white">{t.name}</h3>
-                <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-black/45 border border-white/10">
-                  <div>
-                    <div className="text-[11px] text-slate-400">Prize Pool</div>
-                    <div className="text-xl font-black text-amber-300 font-mono">
-                      ₹{Number(t.prize_pool || 50000).toLocaleString()}
+        {tournaments.length === 0 ? (
+          <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10 text-center space-y-3">
+            <p className="text-slate-400 text-sm">No tournaments currently live. Check back soon or create one via Admin Panel.</p>
+            <Link href="/admin" className="inline-block px-4 py-2 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 text-xs font-bold border border-purple-500/30 transition">
+              Open Admin Panel →
+            </Link>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-6">
+            {tournaments.map((t) => (
+              <TiltCard3D key={t.id} className="p-6 flex flex-col justify-between space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                      {t.platform} • {t.duration_type}
+                    </span>
+                    <span className="text-xs font-bold text-emerald-400 uppercase">● {t.status}</span>
+                  </div>
+                  <h3 className="text-xl font-black text-white">{t.name}</h3>
+                  <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-black/45 border border-white/10">
+                    <div>
+                      <div className="text-[11px] text-slate-400">Prize Pool</div>
+                      <div className="text-xl font-black text-amber-300 font-mono">
+                        ₹{Number(t.prize_pool || 50000).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-slate-400">Entry Fee</div>
+                      <div className="text-lg font-black text-cyan-300 font-mono">₹{t.entry_fee}</div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-[11px] text-slate-400">Entry Fee</div>
-                    <div className="text-lg font-black text-cyan-300 font-mono">₹{t.entry_fee}</div>
-                  </div>
                 </div>
-              </div>
-              <Link
-                href={`/team-builder/${t.id}`}
-                className="w-full py-3 rounded-xl font-extrabold text-xs sm:text-sm text-center bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg hover:opacity-95 transition block"
-              >
-                ⚡ Enter & Draft in 3D Pitch
-              </Link>
-            </TiltCard3D>
-          ))}
-        </div>
+                <Link
+                  href={`/team-builder/${t.id}`}
+                  className="w-full py-3 rounded-xl font-extrabold text-xs sm:text-sm text-center bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg hover:opacity-95 transition block"
+                >
+                  ⚡ Enter & Draft in 3D Pitch
+                </Link>
+              </TiltCard3D>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

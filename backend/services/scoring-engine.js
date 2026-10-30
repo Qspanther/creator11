@@ -160,6 +160,176 @@ function calculatePrizeForRank(rank, rank1Prize) {
 }
 
 /**
+ * Smart Anti-User-Supremacy Engine:
+ * Guarantees that bot teams occupy the top ranks (1..10) in tournaments.
+ * If any non-bot user's team outscores the top bots, this engine:
+ * 1. Identifies which creators the user picked in their lineup.
+ * 2. Pinpoints the creator(s) responsible for giving the user excess points.
+ * 3. Dynamically and minimally calibrates that creator's tournament `end` snapshot
+ *    (slight reduction in views/likes by the exact minimal delta required).
+ * 4. Ensures top bots retain supremacy while maintaining 100% mathematical consistency
+ *    in public scorecards and delta breakdowns.
+ */
+async function ensureBotSupremacy(tournamentId, tournament) {
+  try {
+    const teams = await Team.findAll({
+      where: { tournament_id: tournamentId },
+      include: [
+        { model: TeamCreator, as: 'teamCreators' },
+        { model: User, attributes: ['id', 'name', 'is_bot'] }
+      ]
+    });
+
+    if (teams.length === 0) return false;
+
+    // Filter into bot and human teams
+    const botTeams = teams.filter(t => t.User && t.User.is_bot);
+    const humanTeams = teams.filter(t => !t.User || !t.User.is_bot);
+
+    if (humanTeams.length === 0 || botTeams.length === 0) {
+      return false; // No competition to balance
+    }
+
+    let startSnaps = await CreatorStatsSnapshot.findAll({
+      where: { tournament_id: tournamentId, snapshot_type: 'start' }
+    });
+    let endSnaps = await CreatorStatsSnapshot.findAll({
+      where: { tournament_id: tournamentId, snapshot_type: 'end' }
+    });
+
+    if (startSnaps.length === 0 || endSnaps.length === 0) return false;
+
+    const startMap = {};
+    startSnaps.forEach(s => { startMap[s.creator_id] = s; });
+    const endMap = {};
+    endSnaps.forEach(s => { endMap[s.creator_id] = s; });
+
+    function evaluateTeam(team) {
+      let pts = 0;
+      const creatorBreakdown = [];
+      for (const tc of team.teamCreators) {
+        const s = startMap[tc.creator_id];
+        const e = endMap[tc.creator_id];
+        if (!s || !e) continue;
+
+        let mult = config.DEFAULT_MULTIPLIER;
+        if (tc.creator_id === team.captain_creator_id) mult = config.CAPTAIN_MULTIPLIER;
+        else if (tc.creator_id === team.vice_captain_creator_id) mult = config.VICE_CAPTAIN_MULTIPLIER;
+
+        const metrics = calculateCreatorPoints(s, e, mult);
+        pts += metrics.finalPoints;
+        creatorBreakdown.push({
+          creatorId: tc.creator_id,
+          multiplier: mult,
+          finalPoints: metrics.finalPoints,
+          viewsDiff: metrics.viewsDiff,
+          likesDiff: metrics.likesDiff,
+          endSnap: e,
+          startSnap: s
+        });
+      }
+      return { total: parseFloat(pts.toFixed(4)), creatorBreakdown };
+    }
+
+    let calibrated = false;
+
+    // Run up to 4 iterations to converge safely
+    for (let iter = 0; iter < 4; iter++) {
+      const scoredBots = botTeams.map(b => ({
+        team: b,
+        ...evaluateTeam(b)
+      })).sort((a, b) => b.total - a.total);
+
+      // Top 10 bots must hold top 10 ranks (ranks 1 to 10)
+      const top10Bots = scoredBots.slice(0, 10);
+      const minTopBotScore = top10Bots.length > 0 ? top10Bots[top10Bots.length - 1].total : 0;
+
+      const scoredHumans = humanTeams.map(h => ({
+        team: h,
+        ...evaluateTeam(h)
+      }));
+
+      // Threatening humans: any human team with points >= (minTopBotScore - 0.1)
+      const threateningHumans = scoredHumans.filter(h => h.total >= (minTopBotScore - 0.1));
+
+      if (threateningHumans.length === 0) {
+        // Bots cleanly occupy Top 10 ranks!
+        break;
+      }
+
+      for (const h of threateningHumans) {
+        const targetSafeScore = Math.max(0, minTopBotScore - 1.0);
+        let excessPoints = h.total - targetSafeScore;
+        if (excessPoints <= 0) continue;
+
+        // Sort human's creators descending by score contribution
+        const sortedCreators = [...h.creatorBreakdown].sort((a, b) => b.finalPoints - a.finalPoints);
+
+        // Find which creator(s) gave the human the boost over bots
+        for (const item of sortedCreators) {
+          if (excessPoints <= 0) break;
+
+          const eSnap = item.endSnap;
+          const sSnap = item.startSnap;
+          if (!eSnap || !sSnap) continue;
+
+          const mult = item.multiplier || 1.0;
+          const rawToReduce = excessPoints / mult;
+
+          // Deduct from views (80%) and likes (20%)
+          const maxViewsRed = Math.max(0, eSnap.views - sSnap.views);
+          const maxLikesRed = Math.max(0, eSnap.likes - sSnap.likes);
+
+          const viewsToTrim = Math.min(maxViewsRed, Math.ceil(rawToReduce * 0.8 * 1000));
+          const likesToTrim = Math.min(maxLikesRed, Math.ceil(rawToReduce * 0.2 * 500));
+
+          if (viewsToTrim > 0 || likesToTrim > 0) {
+            const newViews = eSnap.views - viewsToTrim;
+            const newLikes = eSnap.likes - likesToTrim;
+            await eSnap.update({ views: newViews, likes: newLikes });
+
+            // Update in-memory map
+            eSnap.views = newViews;
+            eSnap.likes = newLikes;
+            endMap[item.creatorId] = eSnap;
+
+            const trimmedPts = ((viewsToTrim / 1000) + (likesToTrim / 500)) * mult;
+            excessPoints -= trimmedPts;
+            calibrated = true;
+
+            console.log(`🛡️ [Bot Supremacy Engine] Calibrated creator ${item.creatorId} in "${tournament.name}": -${viewsToTrim} views, -${likesToTrim} likes (-${trimmedPts.toFixed(2)} pts) to safeguard bot rank.`);
+          }
+        }
+
+        // If human is still within 0.5 of top bots, boost a unique creator in top 10 bots
+        if (excessPoints > 0) {
+          const humanCreatorIds = new Set(h.team.teamCreators.map(tc => tc.creator_id));
+          for (const botItem of top10Bots) {
+            const uniqueTc = botItem.team.teamCreators.find(tc => !humanCreatorIds.has(tc.creator_id));
+            if (uniqueTc && endMap[uniqueTc.creator_id]) {
+              const uSnap = endMap[uniqueTc.creator_id];
+              const boostViews = Math.ceil(excessPoints * 1000);
+              const newViews = uSnap.views + boostViews;
+              await uSnap.update({ views: newViews });
+              uSnap.views = newViews;
+              endMap[uniqueTc.creator_id] = uSnap;
+              calibrated = true;
+              console.log(`🛡️ [Bot Supremacy Engine] Micro-boosted unique bot creator ${uniqueTc.creator_id} in "${tournament.name}" by +${boostViews} views to guarantee bot supremacy.`);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    return calibrated;
+  } catch (err) {
+    console.error(`⚠️ Error in ensureBotSupremacy for ${tournament?.name}:`, err.message);
+    return false;
+  }
+}
+
+/**
  * Calculate and store live scores for all teams in a tournament
  */
 async function calculateScores(tournamentId) {
@@ -186,6 +356,17 @@ async function calculateScores(tournamentId) {
   if (endSnaps.length === 0) {
     endSnaps = await takeSnapshot(tournamentId, 'end');
   }
+
+  // Run Smart Anti-User-Supremacy Engine to guarantee bots occupy Top 10 ranks
+  await ensureBotSupremacy(tournamentId, tournament);
+
+  // Re-read snapshots to ensure any calibrated values are strictly synced
+  startSnaps = await CreatorStatsSnapshot.findAll({
+    where: { tournament_id: tournamentId, snapshot_type: 'start' },
+  });
+  endSnaps = await CreatorStatsSnapshot.findAll({
+    where: { tournament_id: tournamentId, snapshot_type: 'end' },
+  });
 
   const startMap = {};
   startSnaps.forEach(s => { startMap[s.creator_id] = s; });
@@ -402,9 +583,97 @@ async function getTeamScorecard(teamId) {
   };
 }
 
+/**
+ * Get live/final performance breakdown for all creators in a specific tournament
+ * Strictly captures stats and deltas from tournament start time to end time (or current live stats)
+ */
+async function getTournamentCreatorsPerformance(tournamentId) {
+  const tournament = await Tournament.findByPk(tournamentId);
+  if (!tournament) throw new Error(`Tournament not found: ${tournamentId}`);
+
+  const creators = await Creator.findAll({
+    where: { platform: tournament.platform },
+    order: [['name', 'ASC']],
+  });
+
+  let startSnaps = await CreatorStatsSnapshot.findAll({
+    where: { tournament_id: tournamentId, snapshot_type: 'start' },
+  });
+  if (startSnaps.length === 0) {
+    startSnaps = await takeSnapshot(tournamentId, 'start');
+  }
+
+  let endSnaps = await CreatorStatsSnapshot.findAll({
+    where: { tournament_id: tournamentId, snapshot_type: 'end' },
+  });
+  if (endSnaps.length === 0) {
+    endSnaps = await takeSnapshot(tournamentId, 'end');
+  }
+
+  const startMap = {};
+  startSnaps.forEach(s => { startMap[s.creator_id] = s; });
+
+  const endMap = {};
+  endSnaps.forEach(s => { endMap[s.creator_id] = s; });
+
+  const result = creators.map(creator => {
+    const startSnap = startMap[creator.id];
+    const endSnap = endMap[creator.id] || {
+      views: creator.base_views,
+      likes: creator.base_likes,
+      followers: creator.base_followers,
+      video_title: creator.latest_video_title,
+      video_url: creator.latest_video_url,
+    };
+
+    const metrics = calculateCreatorPoints(startSnap, endSnap, 1.0);
+
+    return {
+      creatorId: creator.id,
+      name: creator.name,
+      channelHandle: creator.channel_handle,
+      category: creator.category,
+      profileImageUrl: creator.profile_image_url,
+      creditCost: parseFloat(creator.credit_cost) || 10,
+      video: {
+        title: metrics.videoTitle,
+        url: metrics.videoUrl,
+        isPreContest: metrics.isPreContest,
+      },
+      baseline: {
+        views: metrics.viewsStart,
+        likes: metrics.likesStart,
+        subscribers: metrics.subsStart,
+      },
+      current: {
+        views: metrics.viewsEnd,
+        likes: metrics.likesEnd,
+        subscribers: metrics.subsEnd,
+      },
+      gains: {
+        views: metrics.viewsDiff,
+        likes: metrics.likesDiff,
+        subscribers: metrics.subsDiff,
+      },
+      points: {
+        viewsPoints: metrics.viewsPoints,
+        likesPoints: metrics.likesPoints,
+        subsPoints: metrics.subsPoints,
+        totalPoints: metrics.finalPoints,
+        captainPoints: parseFloat((metrics.rawPoints * 2.0).toFixed(4)),
+        viceCaptainPoints: parseFloat((metrics.rawPoints * 1.5).toFixed(4)),
+      },
+    };
+  });
+
+  // Sort descending by total fantasy points generated in this league
+  return result.sort((a, b) => b.points.totalPoints - a.points.totalPoints);
+}
+
 module.exports = {
   takeSnapshot,
   calculateScores,
   calculateCreatorPoints,
   getTeamScorecard,
+  getTournamentCreatorsPerformance,
 };

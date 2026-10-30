@@ -41,7 +41,7 @@ export default function TournamentsPage3D() {
     apiGet('/tournaments', token)
       .then((res) => {
         const list = Array.isArray(res) ? res : res?.tournaments;
-        if (Array.isArray(list) && list.length > 0) setTournaments(list);
+        if (Array.isArray(list)) setTournaments(list);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -91,10 +91,6 @@ export default function TournamentsPage3D() {
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((t) => {
-            const cur = t.current_participants || 0;
-            const max = t.max_participants || 1200;
-            const pct = Math.min(100, Math.round((cur / max) * 100));
-
             return (
               <TiltCard3D key={t.id} className="p-6 flex flex-col justify-between space-y-4 border border-white/10">
                 <div className="space-y-3 depth-layer-10">
@@ -132,19 +128,6 @@ export default function TournamentsPage3D() {
                     <div className="flex items-center gap-1 text-emerald-400 font-semibold">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       <span>Top 1000 Prize</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs text-slate-300">
-                      <span>{cur} / {max} Players Drafted</span>
-                      <span className="font-mono text-cyan-300">{pct}% Full</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-purple-500 via-cyan-400 to-emerald-400"
-                        style={{ width: `${pct}%` }}
-                      />
                     </div>
                   </div>
                 </div>

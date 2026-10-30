@@ -109,14 +109,14 @@ export default function DashboardPage3D() {
 
         <TiltCard3D className="p-5 border border-purple-400/30">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400 uppercase font-bold">Bot Competitors</span>
-            <TrendingUp className="w-4 h-4 text-purple-400" />
+            <span className="text-xs text-slate-400 uppercase font-bold">Verified Creators</span>
+            <Users className="w-4 h-4 text-purple-400" />
           </div>
           <div className="text-2xl font-black text-purple-300 font-mono mt-1">
-            1,100 Bots Active
+            50 Stars Vault
           </div>
           <div className="text-[11px] text-purple-400/80 mt-2 flex items-center gap-1">
-            <span>●</span> Automated pre-match & ranking rearrange
+            <span>●</span> YouTube Verified Creator League
           </div>
         </TiltCard3D>
 

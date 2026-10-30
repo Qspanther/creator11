@@ -178,7 +178,17 @@ router.get('/tournaments', async (req, res) => {
 
 router.post('/tournaments', async (req, res) => {
   try {
-    const data = { ...req.body, entry_fee: 99.00 };
+    const entryFee = req.body.entry_fee !== undefined && req.body.entry_fee !== ''
+      ? parseFloat(req.body.entry_fee)
+      : 99.00;
+    const prizePool = req.body.prize_pool !== undefined && req.body.prize_pool !== ''
+      ? parseFloat(req.body.prize_pool)
+      : 50000.00;
+    const data = {
+      ...req.body,
+      entry_fee: isNaN(entryFee) ? 99.00 : entryFee,
+      prize_pool: isNaN(prizePool) ? 50000.00 : prizePool,
+    };
     const t = await Tournament.create(data);
 
     await Notification.create({
@@ -199,7 +209,16 @@ router.put('/tournaments/:id', async (req, res) => {
     if (!t) return res.status(404).json({ error: 'Tournament not found' });
     
     const oldStatus = t.status;
-    await t.update(req.body);
+    const updateData = { ...req.body };
+    if (updateData.entry_fee !== undefined && updateData.entry_fee !== '') {
+      const parsedFee = parseFloat(updateData.entry_fee);
+      if (!isNaN(parsedFee)) updateData.entry_fee = parsedFee;
+    }
+    if (updateData.prize_pool !== undefined && updateData.prize_pool !== '') {
+      const parsedPrize = parseFloat(updateData.prize_pool);
+      if (!isNaN(parsedPrize)) updateData.prize_pool = parsedPrize;
+    }
+    await t.update(updateData);
 
     if (oldStatus !== 'live' && t.status === 'live') {
       await Notification.create({

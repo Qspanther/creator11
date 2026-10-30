@@ -12,19 +12,17 @@ const { Op } = require('sequelize');
 const { Tournament, Team } = require('../db/models');
 const { takeSnapshot, calculateScores } = require('./scoring-engine');
 const { distributePrizes } = require('./prize-distribution');
-const { deployPreContestBots, deployAutonomousBots } = require('../routes/bot-manager');
+const { deployPreContestBots, deployAutonomousBots, registerStaggeredBots } = require('../routes/bot-manager');
 
 function startScheduler() {
   console.log('⏰ Starting tournament scheduler with 1100-Bot Automation...');
-
-  const preContestCompleted = new Set();
 
   // Run every minute to check tournament state transitions
   cron.schedule('* * * * *', async () => {
     try {
       const now = new Date();
 
-      // 0. Pre-Contest: Ensure upcoming tournaments have their 1100 bot teams created before start
+      // 0. Pre-Contest: Gradually register bot teams randomly over time until lock_time
       const upcomingTournaments = await Tournament.findAll({
         where: {
           status: 'upcoming',
@@ -34,18 +32,10 @@ function startScheduler() {
       });
 
       for (const t of upcomingTournaments) {
-        const msUntilStart = new Date(t.start_time) - now;
-        const minutesUntilStart = Math.round(msUntilStart / 60000);
-
-        // Deploy pre-contest teams within 60 minutes of start or if participants < 1000
-        if (!preContestCompleted.has(t.id) && (minutesUntilStart <= 60 || t.current_participants < 1000)) {
-          preContestCompleted.add(t.id);
-          try {
-            console.log(`🤖 [Scheduler Pre-Contest] Auto-generating pre-contest teams for 1100 bots in "${t.name}"...`);
-            await deployPreContestBots(t.id);
-          } catch (preErr) {
-            console.error(`⚠️ Error deploying pre-contest bots for ${t.name}:`, preErr.message);
-          }
+        try {
+          await registerStaggeredBots(t.id);
+        } catch (staggerErr) {
+          console.error(`⚠️ Error in staggered bot registration for ${t.name}:`, staggerErr.message);
         }
       }
 

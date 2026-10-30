@@ -37,7 +37,36 @@ router.post('/signup', async (req, res) => {
     // Check if user exists
     const existing = await User.findOne({ where: { email: cleanEmail } });
     if (existing) {
-      return res.status(409).json({ error: 'Email already registered' });
+      if (existing.otp_verified) {
+        return res.status(409).json({ error: 'Email already registered. Please login.' });
+      }
+
+      // Existing unverified user: update details and send fresh OTP
+      const password_hash = await bcrypt.hash(cleanPassword, 10);
+      const otp_code = String(Math.floor(100000 + Math.random() * 900000));
+      const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
+
+      await existing.update({
+        name: cleanName,
+        password_hash,
+        phone: phone || existing.phone,
+        otp_code,
+        otp_expires_at,
+      });
+
+      sendSignupOtp({
+        toEmail: cleanEmail,
+        name: cleanName,
+        otp: otp_code,
+        expiryMinutes: config.OTP_EXPIRY_MINUTES,
+      }).catch(err => console.error('Email send error (signup resend):', err.message));
+
+      return res.status(200).json({
+        message: 'Account pending verification. Fresh OTP sent to your email.',
+        userId: existing.id,
+        email: existing.email,
+        referralCode: existing.referral_code,
+      });
     }
 
     // Generate clean personal referral promo code for this new user
@@ -190,12 +219,12 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'OTP already verified' });
     }
 
-    if (user.otp_code !== otp) {
-      return res.status(400).json({ error: 'Invalid OTP' });
+    if (String(user.otp_code).trim() !== cleanOtp) {
+      return res.status(400).json({ error: 'Invalid OTP. Please check the 6-digit code sent to your email.' });
     }
 
     if (new Date() > new Date(user.otp_expires_at)) {
-      return res.status(400).json({ error: 'OTP expired' });
+      return res.status(400).json({ error: 'OTP has expired. Please request a new OTP.' });
     }
 
     await user.update({ otp_verified: true, otp_code: null });
@@ -218,6 +247,48 @@ router.post('/verify-otp', async (req, res) => {
   } catch (error) {
     console.error('OTP verification error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /auth/resend-otp
+router.post('/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const cleanEmail = String(email || '').trim().toLowerCase();
+
+    if (!cleanEmail) {
+      return res.status(400).json({ error: 'Email address is required' });
+    }
+
+    const user = await User.findOne({ where: { email: cleanEmail } });
+    if (!user) {
+      return res.status(404).json({ error: 'No account found with this email' });
+    }
+
+    if (user.otp_verified) {
+      return res.status(400).json({ error: 'Your email is already verified. Please login.' });
+    }
+
+    const otp_code = String(Math.floor(100000 + Math.random() * 900000));
+    const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
+
+    await user.update({ otp_code, otp_expires_at });
+
+    await sendSignupOtp({
+      toEmail: cleanEmail,
+      name: user.name,
+      otp: otp_code,
+      expiryMinutes: config.OTP_EXPIRY_MINUTES,
+    }).catch(err => console.error('Email send error (resend):', err.message));
+
+    res.json({
+      success: true,
+      message: 'A fresh OTP has been sent to your email. Please check your inbox and spam folder.',
+      email: cleanEmail,
+    });
+  } catch (error) {
+    console.error('Resend OTP error:', error);
+    res.status(500).json({ error: 'Failed to resend OTP. Please try again.' });
   }
 });
 
@@ -359,8 +430,8 @@ router.post('/reset-password', async (req, res) => {
     const user = await User.findOne({ where: { email: cleanEmail } });
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    if (user.otp_code !== otp || new Date() > new Date(user.otp_expires_at)) {
-      return res.status(400).json({ error: 'Invalid or expired OTP' });
+    if (String(user.otp_code).trim() !== cleanOtp || new Date() > new Date(user.otp_expires_at)) {
+      return res.status(400).json({ error: 'Invalid or expired OTP. Please request a new OTP.' });
     }
 
     const password_hash = await bcrypt.hash(newPassword, 10);

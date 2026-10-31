@@ -28,9 +28,12 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
       limit: 1200,
     });
 
-    // Auto-compute scores if live or completed and no leaderboard entries yet
-    if (entries.length === 0 && (tournament.status === 'live' || tournament.status === 'completed')) {
+        // Auto-populate all bots and compute ranks/scores if locked, live, or completed with missing/incomplete leaderboard
+    const shouldPopulateBots = tournament.status === 'locked' || tournament.status === 'live' || tournament.status === 'completed';
+    if ((shouldPopulateBots && entries.length < 100) || (entries.length === 0 && tournament.status === 'live')) {
       try {
+        const { registerStaggeredBots } = require('./bot-manager');
+        await registerStaggeredBots(tournamentId);
         await calculateScores(tournamentId);
         entries = await Leaderboard.findAll({
           where: { tournament_id: tournamentId },

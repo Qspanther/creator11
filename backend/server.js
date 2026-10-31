@@ -11,6 +11,14 @@ const { authenticate, isAdmin } = require('./middleware/auth');
 
 const app = express();
 
+// Global crash guards
+process.on('uncaughtException', (err) => {
+  console.error('🛡️ [Server Guard] Uncaught Exception intercepted:', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('🛡️ [Server Guard] Unhandled Rejection intercepted:', reason);
+});
+
 
 // â”€â”€â”€ Security Headers (Helmet) â”€â”€â”€
 app.use(helmet({

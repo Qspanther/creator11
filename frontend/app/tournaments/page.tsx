@@ -90,7 +90,13 @@ export default function TournamentsPage3D() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map((t) => {
+                    {filtered.map((t) => {
+            const isLocked =
+              t.status === 'locked' ||
+              t.status === 'live' ||
+              t.status === 'completed' ||
+              Boolean(t.lock_time && new Date(t.lock_time).getTime() <= Date.now());
+
             return (
               <TiltCard3D key={t.id} className="p-6 flex flex-col justify-between space-y-4 border border-white/10">
                 <div className="space-y-3 depth-layer-10">
@@ -98,9 +104,23 @@ export default function TournamentsPage3D() {
                     <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-red-500/20 text-red-300 border border-red-400/30">
                       {t.platform} • {t.duration_type || '24h'}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 uppercase">
-                      ● {t.status}
-                    </span>
+                    {isLocked && t.status === 'upcoming' ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-400/40 uppercase">
+                        🔒 LOCKED
+                      </span>
+                    ) : (
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                          t.status === 'live'
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                            : t.status === 'completed'
+                            ? 'bg-slate-500/20 text-slate-300 border-slate-400/40'
+                            : 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40'
+                        }`}
+                      >
+                        ● {t.status}
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="text-xl font-black text-white">{t.name}</h3>
@@ -132,14 +152,20 @@ export default function TournamentsPage3D() {
                   </div>
                 </div>
 
-                <div className="space-y-2 pt-2">
-                  <Link
-                    href={`/team-builder/${t.id}`}
-                    onClick={() => playSpatialSFX('power')}
-                    className="w-full py-3 rounded-xl font-extrabold text-xs sm:text-sm text-center bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg hover:opacity-95 transition block"
-                  >
-                    ⚡ Enter & Draft in 3D Pitch
-                  </Link>
+                                <div className="space-y-2 pt-2">
+                  {isLocked ? (
+                    <div className="w-full py-3 rounded-xl font-extrabold text-xs sm:text-sm text-center bg-white/5 border border-amber-500/30 text-amber-300 flex items-center justify-center gap-2 cursor-not-allowed">
+                      <span>🔒 Contest Locked (Entries Closed)</span>
+                    </div>
+                  ) : (
+                    <Link
+                      href={`/team-builder/${t.id}`}
+                      onClick={() => playSpatialSFX('power')}
+                      className="w-full py-3 rounded-xl font-extrabold text-xs sm:text-sm text-center bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg hover:opacity-95 transition block"
+                    >
+                      ⚡ Enter & Draft in 3D Pitch
+                    </Link>
+                  )}
 
                   <Link
                     href={`/leaderboard/${t.id}`}

@@ -42,8 +42,16 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
   const { token } = useAuth();
   const router = useRouter();
 
-  const [creators, setCreators] = useState<Creator[]>([]);
-  const [tournament, setTournament] = useState<{ name: string; platform: string; entry_fee: string; prize_pool: string; duration_type?: string } | null>(null);
+    const [creators, setCreators] = useState<Creator[]>([]);
+  const [tournament, setTournament] = useState<{ id?: string; name: string; platform: string; entry_fee: string; prize_pool: string; duration_type?: string; status?: string; lock_time?: string; start_time?: string } | null>(null);
+  const [insufficientModal, setInsufficientModal] = useState<{ isOpen: boolean; required: number; balance: number; needed: number }>({ isOpen: false, required: 0, balance: 0, needed: 0 });
+
+  const isLocked = useMemo(() => {
+    if (!tournament) return false;
+    if (['locked', 'live', 'completed'].includes((tournament as any).status || '')) return true;
+    if ((tournament as any).lock_time && new Date((tournament as any).lock_time).getTime() <= Date.now()) return true;
+    return false;
+  }, [tournament]);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [captainId, setCaptainId] = useState<string | null>(null);
@@ -260,13 +268,20 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
       return;
     }
 
+        if (isLocked) {
+      setError('This contest is locked. New team entries or edits are closed.');
+      return;
+    }
+
     if (!existingTeam) {
       const entryFee = parseFloat(tournament?.entry_fee || '99');
       if (walletBalance !== null && walletBalance < entryFee) {
-        setError(`Insufficient wallet balance: ₹${entryFee.toFixed(2)} required. Redirecting to deposit...`);
-        setTimeout(() => {
-          router.push(`/wallet?required=${entryFee}&reason=contest_entry&tournamentId=${tournamentId}`);
-        }, 1000);
+        setInsufficientModal({
+          isOpen: true,
+          required: entryFee,
+          balance: walletBalance,
+          needed: Math.max(0, entryFee - walletBalance)
+        });
         return;
       }
     }
@@ -299,9 +314,19 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
         );
       }
       router.push('/my-teams');
-    } catch (err: unknown) {
+        } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : 'Failed to save team';
-      setError(errMsg);
+      if (errMsg.toLowerCase().includes('insufficient wallet balance')) {
+        const fee = parseFloat(tournament?.entry_fee || '99');
+        setInsufficientModal({
+          isOpen: true,
+          required: fee,
+          balance: walletBalance ?? 0,
+          needed: Math.max(0, fee - (walletBalance ?? 0))
+        });
+      } else {
+        setError(errMsg);
+      }
     } finally {
       setSaving(false);
     }
@@ -367,21 +392,49 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
             >
               Reset
             </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className={`px-5 py-2 rounded-xl font-black text-xs sm:text-sm transition cursor-pointer ${
-                isReadyToSave
-                  ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 shadow-lg hover:opacity-95'
-                  : 'bg-white/10 text-slate-400 border border-white/10'
-              }`}
-            >
-              {saving ? 'Saving...' : existingTeam ? 'Update Team' : '🔒 Lock & Save 3D Team'}
-            </button>
+                        {isLocked ? (
+              <button
+                type="button"
+                disabled
+                className="px-5 py-2 rounded-xl font-black text-xs sm:text-sm bg-white/10 text-slate-400 border border-white/10 cursor-not-allowed flex items-center gap-1.5"
+              >
+                🔒 Contest Locked
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className={`px-5 py-2 rounded-xl font-black text-xs sm:text-sm transition cursor-pointer ${
+                  isReadyToSave
+                    ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 shadow-lg hover:opacity-95'
+                    : 'bg-white/10 text-slate-400 border border-white/10'
+                }`}
+              >
+                {saving ? 'Saving...' : existingTeam ? 'Update Team' : '🔒 Lock & Save 3D Team'}
+              </button>
+            )}
           </div>
         </div>
-      </TiltCard3D>
+            </TiltCard3D>
+
+      {isLocked && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 text-amber-400" />
+            <div>
+              <div className="font-black text-sm text-white">Contest Locked (Entries Closed)</div>
+              <div className="text-xs text-amber-200/80">This tournament is locked or live. Roster drafting and edits are closed.</div>
+            </div>
+          </div>
+          <Link
+            href={`/leaderboard/${tournamentId}`}
+            className="px-3.5 py-1.5 rounded-xl font-bold text-xs bg-amber-400 text-black hover:bg-amber-300 transition text-center whitespace-nowrap"
+          >
+            View Live Standings →
+          </Link>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-12 gap-6 items-start">
         {/* Left 7 Cols: 3D Holographic Stadium Pitch */}
@@ -648,6 +701,59 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
           </div>
         </div>
       </div>
+
+
+      {/* Insufficient Balance Popup Modal */}
+      {insufficientModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-cyan-500/30 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-3 text-amber-400">
+              <div className="w-12 h-12 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-2xl">
+                ⚠️
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Insufficient Wallet Balance</h3>
+                <p className="text-xs text-slate-400">Add funds to join this Battle League</p>
+              </div>
+            </div>
+
+            <div className="bg-black/50 border border-white/10 rounded-2xl p-4 space-y-2.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Contest Entry Fee:</span>
+                <span className="font-mono font-bold text-white">₹{insufficientModal.required.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Current Wallet Balance:</span>
+                <span className="font-mono font-bold text-cyan-300">₹{insufficientModal.balance.toFixed(2)}</span>
+              </div>
+              <div className="h-px bg-white/10 my-1" />
+              <div className="flex justify-between text-sm">
+                <span className="text-amber-300 font-semibold">Amount Needed:</span>
+                <span className="font-mono font-black text-amber-400">₹{insufficientModal.needed.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setInsufficientModal(prev => ({ ...prev, isOpen: false }))}
+                className="py-3 rounded-xl font-bold text-xs bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  router.push(`/wallet?required=${Math.ceil(insufficientModal.needed)}&reason=contest_entry&tournamentId=${tournamentId}`);
+                }}
+                className="py-3 rounded-xl font-black text-xs bg-gradient-to-r from-amber-400 to-amber-500 text-black shadow-lg shadow-amber-500/20 hover:opacity-95 transition"
+              >
+                Add ₹{Math.ceil(insufficientModal.needed)} to Wallet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Profile Detail 3D Modal */}
       {modalCreator && (

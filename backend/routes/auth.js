@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('../config');
@@ -308,7 +308,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const validPassword = await bcrypt.compare(password, user.password_hash);
+    const validPassword = await bcrypt.compare(cleanPassword, user.password_hash);
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -434,7 +434,7 @@ router.post('/reset-password', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired OTP. Please request a new OTP.' });
     }
 
-    const password_hash = await bcrypt.hash(newPassword, 10);
+    const password_hash = await bcrypt.hash(cleanNewPassword, 10);
     await user.update({ password_hash, otp_code: null });
 
     res.json({ message: 'Password reset successful' });
@@ -456,7 +456,7 @@ router.put('/change-password', authenticate, async (req, res) => {
     const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
     if (!validPassword) return res.status(401).json({ error: 'Incorrect current password' });
 
-    const password_hash = await bcrypt.hash(newPassword, 10);
+    const password_hash = await bcrypt.hash(cleanNewPassword, 10);
     await user.update({ password_hash });
 
     res.json({ message: 'Password changed successfully' });

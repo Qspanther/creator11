@@ -17,6 +17,8 @@ node_modules/
 *.sqlite
 *.sqlite3
 *.db
+*.sqlite-shm
+*.sqlite-wal
 backend/creator11.sqlite
 
 # Next.js build

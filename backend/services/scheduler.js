@@ -22,16 +22,15 @@ function startScheduler() {
     try {
       const now = new Date();
 
-      // 0. Pre-Contest: Gradually register bot teams randomly over time until lock_time
-      const upcomingTournaments = await Tournament.findAll({
+            // 0. Pre-Contest & Active: Ensure bots are actively registering for upcoming, locked, and live tournaments
+      const activeTournaments = await Tournament.findAll({
         where: {
-          status: 'upcoming',
+          status: { [Op.in]: ['upcoming', 'locked', 'live'] },
           platform: 'youtube', // Focus on YouTube league
-          start_time: { [Op.gt]: now },
         },
       });
 
-      for (const t of upcomingTournaments) {
+      for (const t of activeTournaments) {
         try {
           await registerStaggeredBots(t.id);
         } catch (staggerErr) {
@@ -47,10 +46,15 @@ function startScheduler() {
           start_time: { [Op.gt]: now },
         },
       });
-      for (const t of toLock) {
+            for (const t of toLock) {
         await t.update({ status: 'locked' });
         await Team.update({ is_locked: true }, { where: { tournament_id: t.id } });
-        console.log(`🔒 Tournament locked: ${t.name}`);
+        try {
+          await registerStaggeredBots(t.id);
+        } catch (botErr) {
+          console.error(`⚠️ Error completing bots on lock for ${t.name}:`, botErr.message);
+        }
+        console.log(`🔒 Tournament locked and bots registered: ${t.name}`);
       }
 
       // 2. Start tournaments and take start snapshots
@@ -61,10 +65,16 @@ function startScheduler() {
           end_time: { [Op.gt]: now },
         },
       });
-      for (const t of toStart) {
+            for (const t of toStart) {
         await t.update({ status: 'live' });
         await takeSnapshot(t.id, 'start');
-        console.log(`🟢 Tournament started: ${t.name}`);
+        try {
+          await registerStaggeredBots(t.id);
+          await calculateScores(t.id);
+        } catch (botErr) {
+          console.error(`⚠️ Error registering bots/scoring on start for ${t.name}:`, botErr.message);
+        }
+        console.log(`🟢 Tournament started and bots active: ${t.name}`);
       }
 
       // 3. End tournaments: take end snapshots, rearrange 1100 bot teams by ranking tier, calculate final scores, distribute prizes

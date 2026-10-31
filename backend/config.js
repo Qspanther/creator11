@@ -63,7 +63,7 @@ const config = {
 
   // ─── Database ───
   DB_DIALECT: 'sqlite',
-  DB_STORAGE: process.env.DB_STORAGE || './creator11.sqlite',
+  DB_STORAGE: process.env.DB_STORAGE || require('path').resolve(__dirname, 'creator11.sqlite'),
 
   // ─── Auth ───
   JWT_SECRET: process.env.JWT_SECRET || 'creator11-dev-secret-change-in-production',

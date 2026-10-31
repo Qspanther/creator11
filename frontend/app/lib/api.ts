@@ -56,5 +56,8 @@ export const apiGet = (endpoint: string, token?: string | null) =>
 export const apiPost = (endpoint: string, body: unknown, token?: string | null) =>
   api(endpoint, { method: 'POST', body, token });
 
+export const apiDelete = (endpoint: string, token?: string | null) =>
+  api(endpoint, { method: 'DELETE', token });
+
 export const apiPut = (endpoint: string, body: unknown, token?: string | null) =>
   api(endpoint, { method: 'PUT', body, token });

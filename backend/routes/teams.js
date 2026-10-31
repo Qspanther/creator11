@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const { authenticate } = require('../middleware/auth');
 const config = require('../config');
 const { Team, TeamCreator, Creator, Tournament, Wallet, Transaction, User, SystemSetting } = require('../db/models');
@@ -6,6 +7,17 @@ const sequelize = require('../db/index');
 const { getTeamScorecard } = require('../services/scoring-engine');
 
 const router = express.Router();
+
+function isValidBotKey(providedKey) {
+  if (!providedKey || typeof providedKey !== 'string' || !config.BOT_API_KEY) return false;
+  try {
+    const expected = crypto.createHash('sha256').update(String(config.BOT_API_KEY)).digest();
+    const provided = crypto.createHash('sha256').update(String(providedKey)).digest();
+    return crypto.timingSafeEqual(expected, provided);
+  } catch (e) {
+    return false;
+  }
+}
 
 /**
  * Validate team composition:
@@ -101,10 +113,14 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     // Server-side lock time check — never trust client (unless authorized bot with API key)
-    const isBotBypass = (req.headers['x-bot-api-key'] === config.BOT_API_KEY) || req.user?.is_bot;
+    const isBotBypass = isValidBotKey(req.headers['x-bot-api-key']) || req.user?.is_bot;
     const now = new Date();
-    if (!isBotBypass && now >= new Date(tournament.lock_time)) {
-      return res.status(400).json({ error: 'Tournament is locked. Cannot create or edit teams.' });
+    const isLocked = (tournament.lock_time && now >= new Date(tournament.lock_time)) ||
+                     tournament.status === 'locked' ||
+                     tournament.status === 'live' ||
+                     tournament.status === 'completed';
+    if (!isBotBypass && isLocked) {
+      return res.status(400).json({ error: 'This tournament contest is locked. New team entries are closed.' });
     }
 
     // ★★★ TOURNAMENT ACCESS GATE: Check Active Subscription or Referral Pass ★★★
@@ -178,6 +194,12 @@ router.post('/', authenticate, async (req, res) => {
         });
       };
 
+      // Deduct entry fee from user wallet balance
+      if (entryFee > 0) {
+        const newBalance = Math.max(0, balance - entryFee);
+        await wallet.update({ balance: newBalance }, { transaction: t });
+      }
+
       // Create entry fee transaction
       await Transaction.create({
         wallet_id: wallet.id,
@@ -185,7 +207,7 @@ router.post('/', authenticate, async (req, res) => {
         amount: -entryFee,
         status: 'completed',
         reference_tournament_id: tournamentId,
-        description: `Entry fee (₹${entryFee.toFixed(2)}) for ${tournament.name}`,
+        description: `Contest Entry Fee (₹${entryFee.toLocaleString('en-IN')}) for "${tournament.name}"`,
       }, { transaction: t });
 
       // Create team
@@ -246,8 +268,13 @@ router.put('/:id', authenticate, async (req, res) => {
 
     // Server-side lock time check — never trust client
     const now = new Date();
-    if (now >= new Date(tournament.lock_time) || team.is_locked) {
-      return res.status(400).json({ error: 'Tournament is locked. Cannot edit team.' });
+    const isLocked = (tournament.lock_time && now >= new Date(tournament.lock_time)) ||
+                     tournament.status === 'locked' ||
+                     tournament.status === 'live' ||
+                     tournament.status === 'completed' ||
+                     team.is_locked;
+    if (isLocked) {
+      return res.status(400).json({ error: 'This tournament contest is locked. Cannot edit team.' });
     }
 
     const { creatorIds, captainId, viceCaptainId } = req.body;

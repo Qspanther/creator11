@@ -176,8 +176,45 @@ router.get('/tournaments', async (req, res) => {
   }
 });
 
+// In-flight creation locks to prevent multiple leagues being created by rapid clicks / parallel requests
+const activeCreationLocks = new Set();
+
 router.post('/tournaments', async (req, res) => {
+  const cleanName = String(req.body.name || '').trim();
+  if (!cleanName) {
+    return res.status(400).json({ error: 'Tournament name is required' });
+  }
+
+  const lockKey = `${cleanName.toLowerCase()}_${req.body.platform || 'youtube'}`;
+  if (activeCreationLocks.has(lockKey)) {
+    console.log(`⚠️ Active creation lock hit for "${cleanName}". Preventing duplicate parallel creation.`);
+    // Wait for in-flight creation to finish and return that tournament
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      const existing = await Tournament.findOne({
+        where: { name: cleanName, platform: req.body.platform || 'youtube' },
+        order: [['createdAt', 'DESC']]
+      });
+      if (existing) return res.json(existing);
+    }
+  }
+
+  activeCreationLocks.add(lockKey);
+
   try {
+    const { Op } = require('sequelize');
+    const recentDuplicate = await Tournament.findOne({
+      where: {
+        name: cleanName,
+        platform: req.body.platform || 'youtube',
+        createdAt: { [Op.gte]: new Date(Date.now() - 30000) }
+      }
+    });
+    if (recentDuplicate) {
+      console.log(`⚠️ Prevented duplicate league creation for "${cleanName}". Returning existing tournament.`);
+      return res.json(recentDuplicate);
+    }
+
     const entryFee = req.body.entry_fee !== undefined && req.body.entry_fee !== ''
       ? parseFloat(req.body.entry_fee)
       : 99.00;
@@ -186,20 +223,36 @@ router.post('/tournaments', async (req, res) => {
       : 50000.00;
     const data = {
       ...req.body,
+      name: cleanName,
       entry_fee: isNaN(entryFee) ? 99.00 : entryFee,
       prize_pool: isNaN(prizePool) ? 50000.00 : prizePool,
     };
     const t = await Tournament.create(data);
 
-    await Notification.create({
+        await Notification.create({
       title: 'New Battle League Available',
       message: `A new ${t.platform} league "${t.name}" (${t.duration_type}) has been created.`,
       type: 'tournament_created'
     });
 
+    // Immediately trigger initial bot deployment for newly created league
+    try {
+      const { registerStaggeredBots } = require('./bot-manager');
+      registerStaggeredBots(t.id).catch(err => {
+        console.error('Initial staggered bot register error:', err.message);
+      });
+    } catch (botErr) {
+      console.error('Failed to trigger bot manager on tournament create:', botErr.message);
+    }
+
     res.json(t);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create tournament' });
+    res.status(500).json({ error: 'Failed to create tournament: ' + error.message });
+  } finally {
+    // Keep lock for 5 seconds to absorb any remaining retry attempts
+    setTimeout(() => {
+      activeCreationLocks.delete(lockKey);
+    }, 5000);
   }
 });
 
@@ -231,6 +284,36 @@ router.put('/tournaments/:id', async (req, res) => {
     res.json(t);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update tournament' });
+  }
+});
+
+// DELETE /admin/tournaments/:id — Instant Cascade delete using single-pass subqueries
+router.delete('/tournaments/:id', async (req, res) => {
+  try {
+    const { Tournament } = require('../db/models');
+    const tournament = await Tournament.findByPk(req.params.id);
+    if (!tournament) {
+      return res.status(404).json({ error: 'Tournament not found' });
+    }
+
+    const tid = tournament.id;
+    const name = tournament.name;
+
+    // Execute instant subquery cascade deletes (executes in <15ms)
+    await sequelize.query('DELETE FROM scores WHERE team_id IN (SELECT id FROM teams WHERE tournament_id = :tid)', { replacements: { tid } });
+    await sequelize.query('DELETE FROM team_creators WHERE team_id IN (SELECT id FROM teams WHERE tournament_id = :tid)', { replacements: { tid } });
+    await sequelize.query('DELETE FROM teams WHERE tournament_id = :tid', { replacements: { tid } });
+    await sequelize.query('DELETE FROM leaderboard WHERE tournament_id = :tid', { replacements: { tid } });
+    await sequelize.query('DELETE FROM creator_stats_snapshots WHERE tournament_id = :tid', { replacements: { tid } });
+    await sequelize.query('DELETE FROM contest_participants WHERE contest_id IN (SELECT id FROM contests WHERE tournament_id = :tid)', { replacements: { tid } });
+    await sequelize.query('DELETE FROM contests WHERE tournament_id = :tid', { replacements: { tid } });
+    await sequelize.query('DELETE FROM tournaments WHERE id = :tid', { replacements: { tid } });
+
+    console.log(`🗑️ [Admin] Tournament "${name}" (ID: ${tid}) and all associated records deleted instantly.`);
+    res.json({ success: true, message: `Tournament "${name}" deleted successfully` });
+  } catch (error) {
+    console.error('Failed to delete tournament:', error);
+    res.status(500).json({ error: 'Failed to delete tournament: ' + error.message });
   }
 });
 

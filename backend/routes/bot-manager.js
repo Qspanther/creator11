@@ -242,7 +242,8 @@ async function deployPreContestBots(tournamentId) {
 async function registerStaggeredBots(tournamentId) {
   const tournament = await Tournament.findByPk(tournamentId);
   if (!tournament) return { registered: 0 };
-  if (tournament.status !== 'upcoming') return { registered: 0 };
+  // Only skip if tournament is already completed
+  if (tournament.status === 'completed') return { registered: 0 };
 
   const allBots = await User.findAll({
     where: { is_bot: true },
@@ -277,14 +278,14 @@ async function registerStaggeredBots(tournamentId) {
 
   let batchSize = 1;
 
-  if (minutesUntilLock <= 2 || msUntilLock <= 0) {
-    // 2 minutes or less until lock: register ALL remaining bots immediately
+  if (tournament.status === 'locked' || tournament.status === 'live' || minutesUntilLock <= 2 || msUntilLock <= 0) {
+    // 2 minutes or less until lock, or already locked/live: register ALL remaining bots immediately
     batchSize = unregisteredBots.length;
   } else {
-    // Staggered pacing:
+    // Staggered pacing: ensure steady batches so bots join actively
     const idealPace = Math.ceil(unregisteredBots.length / Math.max(1, minutesUntilLock));
-    const minBatch = 1;
-    const maxBatch = Math.min(unregisteredBots.length, Math.max(3, Math.ceil(idealPace * 1.5)));
+    const minBatch = Math.max(5, idealPace);
+    const maxBatch = Math.min(unregisteredBots.length, Math.max(25, Math.ceil(idealPace * 2)));
     batchSize = Math.floor(Math.random() * (maxBatch - minBatch + 1)) + minBatch;
   }
 
@@ -342,13 +343,14 @@ async function registerStaggeredBots(tournamentId) {
     const viceCaptain = selectedCreators[1];
 
     const teamId = uuidv4();
+    const isTeamLocked = (tournament.status === 'locked' || tournament.status === 'live') ? 1 : 0;
     newTeamRecords.push({
       id: teamId,
       user_id: bot.id,
       tournament_id: tournamentId,
       captain_creator_id: captain.id,
       vice_captain_creator_id: viceCaptain.id,
-      is_locked: 0,
+      is_locked: isTeamLocked,
       total_credits_used: totalCredits
     });
 
@@ -371,6 +373,15 @@ async function registerStaggeredBots(tournamentId) {
 
   const totalNow = await Team.count({ where: { tournament_id: tournamentId } });
   await tournament.update({ current_participants: totalNow });
+
+  // If tournament is live or locked, compute leaderboard scores so all bot teams appear ranked
+  if (tournament.status === 'live' || tournament.status === 'locked') {
+    try {
+      await calculateScores(tournamentId);
+    } catch (scErr) {
+      console.error(`⚠️ Error calculating scores after bot registration for ${tournament.name}:`, scErr.message);
+    }
+  }
 
   console.log(`🤖 [Staggered Bot Join] Registered ${newTeamRecords.length} bots for "${tournament.name}". Total teams: ${totalNow} (Remaining bots to enter: ${unregisteredBots.length - newTeamRecords.length}).`);
 

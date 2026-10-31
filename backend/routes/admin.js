@@ -703,17 +703,13 @@ router.post('/upload', upload.single('image'), (req, res) => {
 router.get('/subscription-settings', authenticate, isAdmin, async (req, res) => {
   try {
     const keys = [
+      'subscription_enabled',
+      'subscription_free_mode',
+      'subscription_free_until',
+      'share_unlock_target',
+      'share_unlock_reward_days',
       'subscription_monthly_price',
       'subscription_duration_days',
-      'subscription_enabled',
-      'referral_round_1_target',
-      'referral_round_1_days',
-      'referral_round_2_target',
-      'referral_round_2_days',
-      'referral_round_3_target',
-      'referral_round_3_days',
-      'referral_round_4_target',
-      'referral_round_4_days',
     ];
 
     const settingsRows = await SystemSetting.findAll({ where: { key: keys } });
@@ -736,36 +732,72 @@ router.get('/subscription-settings', authenticate, isAdmin, async (req, res) => 
       }
     });
 
-    const referralPassesCount = await User.count({
+    const shareUnlockedUsersCount = await User.count({
       where: {
         is_bot: false,
-        subscription_type: { [sequelize.Sequelize.Op.like]: 'referral_round_%' },
+        subscription_type: 'share_unlocked',
         subscription_active_until: { [sequelize.Sequelize.Op.gt]: now }
       }
     });
 
+    let totalSharesLogged = 0;
+    try {
+      totalSharesLogged = await ShareLog.count();
+    } catch (e) {}
+
     const totalReferralsMade = await ReferralLog.count();
+
+    // Fetch human users list with share and subscription details
+    const targetShares = parseInt(settingsMap.share_unlock_target || '3', 10);
+    const users = await User.findAll({
+      where: { is_bot: false },
+      attributes: [
+        'id', 'name', 'email', 'phone', 'role', 'referral_code',
+        'subscription_active_until', 'subscription_type',
+        'total_shares_count', 'total_referrals_count', 'created_at'
+      ],
+      order: [['created_at', 'DESC']],
+      limit: 50
+    });
+
+    const userList = users.map(u => {
+      const hasActivePass = Boolean(u.subscription_active_until && new Date(u.subscription_active_until) > now);
+      const isShareTargetMet = Math.max(u.total_shares_count || 0, u.total_referrals_count || 0) >= targetShares;
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        phone: u.phone,
+        role: u.role,
+        referralCode: u.referral_code,
+        subscriptionActiveUntil: u.subscription_active_until,
+        subscriptionType: u.subscription_type || 'none',
+        hasActivePass,
+        isShareTargetMet,
+        totalShares: u.total_shares_count || 0,
+        totalReferrals: u.total_referrals_count || 0,
+        createdAt: u.created_at
+      };
+    });
 
     res.json({
       settings: {
+        subscription_enabled: settingsMap.subscription_enabled || 'true',
+        subscription_free_mode: settingsMap.subscription_free_mode || 'false',
+        subscription_free_until: settingsMap.subscription_free_until || '',
+        share_unlock_target: settingsMap.share_unlock_target || '3',
+        share_unlock_reward_days: settingsMap.share_unlock_reward_days || '30',
         subscription_monthly_price: settingsMap.subscription_monthly_price || '199',
         subscription_duration_days: settingsMap.subscription_duration_days || '30',
-        subscription_enabled: settingsMap.subscription_enabled || 'true',
-        referral_round_1_target: settingsMap.referral_round_1_target || '2',
-        referral_round_1_days: settingsMap.referral_round_1_days || '15',
-        referral_round_2_target: settingsMap.referral_round_2_target || '3',
-        referral_round_2_days: settingsMap.referral_round_2_days || '15',
-        referral_round_3_target: settingsMap.referral_round_3_target || '4',
-        referral_round_3_days: settingsMap.referral_round_3_days || '15',
-        referral_round_4_target: settingsMap.referral_round_4_target || '5',
-        referral_round_4_days: settingsMap.referral_round_4_days || '30',
       },
       stats: {
         activeSubscribersCount,
         paidSubscribersCount,
-        referralPassesCount,
+        shareUnlockedUsersCount,
+        totalSharesLogged,
         totalReferralsMade,
-      }
+      },
+      users: userList
     });
   } catch (error) {
     console.error('Error fetching subscription settings:', error);
@@ -777,17 +809,13 @@ router.get('/subscription-settings', authenticate, isAdmin, async (req, res) => 
 router.put('/subscription-settings', authenticate, isAdmin, async (req, res) => {
   try {
     const allowedKeys = [
+      'subscription_enabled',
+      'subscription_free_mode',
+      'subscription_free_until',
+      'share_unlock_target',
+      'share_unlock_reward_days',
       'subscription_monthly_price',
       'subscription_duration_days',
-      'subscription_enabled',
-      'referral_round_1_target',
-      'referral_round_1_days',
-      'referral_round_2_target',
-      'referral_round_2_days',
-      'referral_round_3_target',
-      'referral_round_3_days',
-      'referral_round_4_target',
-      'referral_round_4_days',
     ];
 
     for (const key of allowedKeys) {
@@ -802,7 +830,7 @@ router.put('/subscription-settings', authenticate, isAdmin, async (req, res) => 
       }
     }
 
-    res.json({ success: true, message: 'Subscription & Referral Round settings updated successfully!' });
+    res.json({ success: true, message: 'Subscription & Share Policy settings updated successfully!' });
   } catch (error) {
     console.error('Error updating subscription settings:', error);
     res.status(500).json({ error: 'Failed to update subscription settings' });

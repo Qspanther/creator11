@@ -103,7 +103,7 @@ export default function AdminDashboardPage() {
           <div className="glass-card p-6 hover:border-neon-gold/50 transition-colors cursor-pointer group">
             <Crown className="text-neon-gold mb-4" size={32} />
             <h3 className="text-xl font-bold mb-2 group-hover:text-neon-gold transition-colors">Subscriptions & Referrals</h3>
-            <p className="text-text-secondary text-sm">Control monthly pass price (₹), access gate, and customize 4-round milestone referral rewards.</p>
+            <p className="text-text-secondary text-sm">Control free promotional mode, monthly VIP pass price (₹), and friend share unlock rules.</p>
           </div>
         </Link>
       </div>

@@ -82,6 +82,10 @@ const User = sequelize.define('User', {
     type: DataTypes.INTEGER,
     defaultValue: 0,
   },
+  total_shares_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
   total_referrals_count: {
     type: DataTypes.INTEGER,
     defaultValue: 0,

@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticate } = require('../middleware/auth');
-const { User, Wallet, Transaction, SystemSetting, Notification, ReferralLog } = require('../db/models');
+const { User, Wallet, Transaction, SystemSetting, Notification, ReferralLog, ShareLog } = require('../db/models');
 const sequelize = require('../db/index');
 const config = require('../config');
 
@@ -16,7 +16,80 @@ async function getSetting(key, fallback) {
   }
 }
 
-// 1. GET /subscription/status — Current user subscription & 4-round referral roadmap
+/**
+ * Helper to check user's tournament access status
+ */
+async function computeAccessStatus(user) {
+  const now = new Date();
+
+  // 1. Master Gate setting
+  const subscriptionEnabled = (await getSetting('subscription_enabled', 'true')) === 'true';
+  if (!subscriptionEnabled) {
+    return { hasAccess: true, reason: 'gate_disabled', isFreeForEveryone: true };
+  }
+
+  // 2. Admin Free Access Mode
+  const freeMode = (await getSetting('subscription_free_mode', 'false')) === 'true';
+  if (freeMode) {
+    return { hasAccess: true, reason: 'free_mode_active', isFreeForEveryone: true };
+  }
+
+  // 3. Admin Free Until Date
+  const freeUntil = await getSetting('subscription_free_until', '');
+  if (freeUntil && new Date(freeUntil) > now) {
+    return {
+      hasAccess: true,
+      reason: 'free_until_active',
+      isFreeForEveryone: true,
+      freeUntil: new Date(freeUntil).toISOString()
+    };
+  }
+
+  // 4. Admin or Bot bypass
+  if (!user || user.is_bot || user.role === 'admin') {
+    return { hasAccess: true, reason: 'admin_or_bot', isFreeForEveryone: false };
+  }
+
+  // 5. Active Paid / Extended Subscription
+  if (user.subscription_active_until && new Date(user.subscription_active_until) > now) {
+    return {
+      hasAccess: true,
+      reason: user.subscription_type === 'paid_monthly' ? 'paid_subscription' : 'share_unlocked',
+      isFreeForEveryone: false,
+      expiresAt: user.subscription_active_until
+    };
+  }
+
+  // 6. Share / Referral Threshold
+  const targetShares = parseInt(await getSetting('share_unlock_target', '3'), 10);
+  const totalShares = user.total_shares_count || 0;
+  const totalReferrals = user.total_referrals_count || 0;
+  const maxCompleted = Math.max(totalShares, totalReferrals);
+
+  if (maxCompleted >= targetShares) {
+    return {
+      hasAccess: true,
+      reason: 'unlocked_via_share',
+      isFreeForEveryone: false,
+      totalShares,
+      totalReferrals,
+      targetShares
+    };
+  }
+
+  // Locked: User needs to buy subscription or share
+  return {
+    hasAccess: false,
+    reason: 'locked',
+    isFreeForEveryone: false,
+    targetShares,
+    totalShares,
+    totalReferrals,
+    sharesNeeded: Math.max(0, targetShares - maxCompleted)
+  };
+}
+
+// 1. GET /subscription/status — User subscription, share progress & complete history
 router.get('/status', authenticate, async (req, res) => {
   try {
     const user = await User.findByPk(req.userId);
@@ -28,62 +101,41 @@ router.get('/status', authenticate, async (req, res) => {
     const monthlyPrice = parseFloat(await getSetting('subscription_monthly_price', '199'));
     const durationDays = parseInt(await getSetting('subscription_duration_days', '30'));
     const subscriptionEnabled = (await getSetting('subscription_enabled', 'true')) === 'true';
-
-    // 4 Rounds Config
-    const round1Target = parseInt(await getSetting('referral_round_1_target', '2'));
-    const round1Days = parseInt(await getSetting('referral_round_1_days', '15'));
-
-    const round2Target = parseInt(await getSetting('referral_round_2_target', '3'));
-    const round2Days = parseInt(await getSetting('referral_round_2_days', '15'));
-
-    const round3Target = parseInt(await getSetting('referral_round_3_target', '4'));
-    const round3Days = parseInt(await getSetting('referral_round_3_days', '15'));
-
-    const round4Target = parseInt(await getSetting('referral_round_4_target', '5'));
-    const round4Days = parseInt(await getSetting('referral_round_4_days', '30'));
-
-    const roundsConfig = [
-      { round: 1, target: round1Target, rewardDays: round1Days },
-      { round: 2, target: round2Target, rewardDays: round2Days },
-      { round: 3, target: round3Target, rewardDays: round3Days },
-      { round: 4, target: round4Target, rewardDays: round4Days },
-    ];
+    const freeMode = (await getSetting('subscription_free_mode', 'false')) === 'true';
+    const freeUntil = await getSetting('subscription_free_until', '');
+    const targetShares = parseInt(await getSetting('share_unlock_target', '3'), 10);
+    const rewardDays = parseInt(await getSetting('share_unlock_reward_days', '30'), 10);
 
     const now = new Date();
-    const isBotOrAdmin = user.is_bot || user.role === 'admin';
-    const isActive = isBotOrAdmin
-      ? true
-      : Boolean(user.subscription_active_until && new Date(user.subscription_active_until) > now);
+    const accessStatus = await computeAccessStatus(user);
 
-    const expiresAt = user.subscription_active_until;
+    const totalShares = user.total_shares_count || 0;
+    const totalReferrals = user.total_referrals_count || 0;
+    const progressCount = Math.max(totalShares, totalReferrals);
+    const isUnlockedViaShare = progressCount >= targetShares;
+
     let daysRemaining = 0;
-    if (expiresAt && new Date(expiresAt) > now) {
-      daysRemaining = Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (user.subscription_active_until && new Date(user.subscription_active_until) > now) {
+      daysRemaining = Math.ceil((new Date(user.subscription_active_until).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
     }
 
-    const currentRound = Math.min(user.referral_round || 1, 5);
-    const activeRoundInfo = roundsConfig.find(r => r.round === currentRound) || roundsConfig[3];
+    // Share Event History for this user
+    let shareLogs = [];
+    try {
+      shareLogs = await ShareLog.findAll({
+        where: { user_id: user.id },
+        order: [['created_at', 'DESC']],
+        limit: 25,
+      });
+    } catch (e) {
+      console.warn('Share logs query note:', e.message);
+    }
 
-    // Build Roadmap Status
-    const roadmap = roundsConfig.map(r => {
-      let status = 'locked';
-      if (r.round < currentRound) status = 'completed';
-      else if (r.round === currentRound) status = 'active';
-
-      return {
-        round: r.round,
-        target: r.target,
-        rewardDays: r.rewardDays,
-        status,
-        progress: r.round === currentRound ? (user.referrals_in_current_round || 0) : (r.round < currentRound ? r.target : 0),
-      };
-    });
-
-    // Recent friends invited
+    // Referral Friends Signup History
     const referralLogs = await ReferralLog.findAll({
       where: { referrer_user_id: user.id },
       order: [['created_at', 'DESC']],
-      limit: 10,
+      limit: 25,
     });
 
     const referredUserIds = referralLogs.map(l => l.referred_user_id);
@@ -97,17 +149,22 @@ router.get('/status', authenticate, async (req, res) => {
       return {
         id: l.id,
         name: u ? u.name : 'Creator Player',
-        round: l.round,
         joinedAt: l.created_at,
       };
     });
 
     res.json({
       success: true,
+      access: accessStatus,
+      freePromo: {
+        isFreeMode: freeMode,
+        freeUntil: freeUntil || null,
+        isFreeNow: freeMode || Boolean(freeUntil && new Date(freeUntil) > now),
+      },
       subscription: {
         isEnabled: subscriptionEnabled,
-        isActive,
-        expiresAt,
+        isActive: accessStatus.hasAccess,
+        expiresAt: user.subscription_active_until,
         daysRemaining,
         type: user.subscription_type || 'none',
         monthlyPrice,
@@ -117,17 +174,23 @@ router.get('/status', authenticate, async (req, res) => {
         balance: wallet ? parseFloat(wallet.balance) : 0,
         currencySymbol: '₹',
       },
-      referral: {
+      share: {
         code: user.referral_code,
         shareUrl: `${config.FRONTEND_URL}/signup?ref=${user.referral_code}`,
-        currentRound,
-        referralsInCurrentRound: user.referrals_in_current_round || 0,
-        targetForCurrentRound: activeRoundInfo.target,
-        rewardDaysForCurrentRound: activeRoundInfo.rewardDays,
-        totalReferralsCount: user.total_referrals_count || 0,
-        hasCompletedAllRounds: currentRound > 4,
-        roadmap,
-        recentReferrals: referralsList,
+        targetShares,
+        rewardDays,
+        totalShares,
+        totalReferrals,
+        progressCount,
+        isUnlocked: isUnlockedViaShare,
+        sharesNeeded: Math.max(0, targetShares - progressCount),
+        shareHistory: shareLogs.map(s => ({
+          id: s.id,
+          platform: s.platform,
+          recipient: s.recipient || 'Direct',
+          sharedAt: s.created_at,
+        })),
+        referralHistory: referralsList,
       },
     });
   } catch (error) {
@@ -136,7 +199,79 @@ router.get('/status', authenticate, async (req, res) => {
   }
 });
 
-// 2. POST /subscription/purchase — Purchase 30-Day Monthly Pass using Wallet Balance
+// 2. POST /subscription/record-share — Record every share event & grant unlock when threshold reached
+router.post('/record-share', authenticate, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const platform = String(req.body.platform || 'whatsapp').trim().toLowerCase();
+    const recipient = String(req.body.recipient || '').trim().slice(0, 100);
+    const shareUrl = `${config.FRONTEND_URL}/signup?ref=${user.referral_code}`;
+
+    // 1. Create ShareLog entry
+    try {
+      await ShareLog.create({
+        user_id: user.id,
+        platform,
+        recipient: recipient || null,
+        share_url: shareUrl,
+      });
+    } catch (logErr) {
+      console.warn('ShareLog creation note:', logErr.message);
+    }
+
+    // 2. Increment user's total shares
+    const newTotalShares = (user.total_shares_count || 0) + 1;
+    user.total_shares_count = newTotalShares;
+
+    // 3. Check if user reached share unlock target
+    const targetShares = parseInt(await getSetting('share_unlock_target', '3'), 10);
+    const rewardDays = parseInt(await getSetting('share_unlock_reward_days', '30'), 10);
+
+    const maxProgress = Math.max(newTotalShares, user.total_referrals_count || 0);
+    let justUnlocked = false;
+
+    if (maxProgress >= targetShares) {
+      const now = new Date();
+      // If user doesn't already have an active subscription, or existing expires sooner than rewardDays
+      const currentExpiry = user.subscription_active_until ? new Date(user.subscription_active_until) : null;
+      const targetExpiry = new Date(now.getTime() + rewardDays * 24 * 60 * 60 * 1000);
+
+      if (!currentExpiry || currentExpiry < now) {
+        user.subscription_active_until = targetExpiry;
+        user.subscription_type = 'share_unlocked';
+        justUnlocked = true;
+
+        await Notification.create({
+          user_id: user.id,
+          title: '🎉 Free Tournament Access Unlocked!',
+          message: `Great job! You've shared Creator11 with ${targetShares} friends. Your ${rewardDays}-Day Tournament Pass is now ACTIVE!`,
+          type: 'referral_reward',
+        });
+      }
+    }
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: justUnlocked
+        ? '🎉 Congratulations! You reached the share target and unlocked FREE tournament access!'
+        : `Share logged successfully! (${newTotalShares}/${targetShares} shares)`,
+      totalShares: newTotalShares,
+      totalReferrals: user.total_referrals_count || 0,
+      targetShares,
+      isUnlocked: maxProgress >= targetShares,
+      justUnlocked,
+    });
+  } catch (error) {
+    console.error('Record share error:', error);
+    res.status(500).json({ error: error.message || 'Failed to record share' });
+  }
+});
+
+// 3. POST /subscription/purchase — Purchase 30-Day Monthly Pass using Wallet Balance
 router.post('/purchase', authenticate, async (req, res) => {
   const t = await sequelize.transaction();
   try {
@@ -184,7 +319,6 @@ router.post('/purchase', authenticate, async (req, res) => {
     const now = new Date();
     let newExpiry;
     if (user.subscription_active_until && new Date(user.subscription_active_until) > now) {
-      // Extend existing subscription
       newExpiry = new Date(new Date(user.subscription_active_until).getTime() + durationDays * 24 * 60 * 60 * 1000);
     } else {
       newExpiry = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
@@ -197,18 +331,18 @@ router.post('/purchase', authenticate, async (req, res) => {
 
     await Notification.create({
       user_id: user.id,
-      title: '👑 Monthly Pass Activated!',
-      message: `Your monthly subscription is now active until ${newExpiry.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. You can now compete in all live & upcoming tournaments!`,
+      title: '👑 VIP Monthly Pass Activated!',
+      message: `Your monthly subscription is active until ${newExpiry.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. You can now compete in all tournaments!`,
       type: 'subscription_success',
     }, { transaction: t });
 
     await t.commit();
 
-    console.log(`👑 User "${user.name}" purchased Monthly Pass for ₹${monthlyPrice}. Valid until: ${newExpiry.toISOString()}`);
+    console.log(`👑 User "${user.name}" purchased VIP Monthly Pass for ₹${monthlyPrice}. Valid until: ${newExpiry.toISOString()}`);
 
     res.json({
       success: true,
-      message: 'Monthly subscription activated successfully!',
+      message: 'VIP Monthly subscription activated successfully!',
       subscriptionActiveUntil: newExpiry,
       subscriptionType: 'paid_monthly',
       remainingBalance: newBalance,

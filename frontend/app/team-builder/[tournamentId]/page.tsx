@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Crown, Star, Check, X, Search,
   Coins, Users, ArrowRight, Sparkles, TrendingUp, Eye, Heart, Video,
-  AlertCircle, ShieldCheck
+  AlertCircle, ShieldCheck, MessageCircle, Send, Copy, Lock, CheckCircle2, Share2
 } from 'lucide-react';
 import TiltCard3D from '../../components/ui/TiltCard3D';
 import { playSpatialSFX } from '../../components/ui/StageControls3D';
@@ -67,6 +67,24 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [hasActivePass, setHasActivePass] = useState<boolean | null>(null);
   const [modalCreator, setModalCreator] = useState<Creator | null>(null);
+  const [accessModalOpen, setAccessModalOpen] = useState(false);
+  const [purchasingPass, setPurchasingPass] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [userShareData, setUserShareData] = useState<{
+    code: string;
+    shareUrl: string;
+    targetShares: number;
+    totalShares: number;
+    totalReferrals: number;
+    monthlyPrice: number;
+  }>({
+    code: '',
+    shareUrl: '',
+    targetShares: 3,
+    totalShares: 0,
+    totalReferrals: 0,
+    monthlyPrice: 199,
+  });
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('creator11:camera-preset', { detail: 'stadium' }));
@@ -100,13 +118,30 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
         })
         .catch(() => {});
 
-      apiGet('/auth/me', token)
-        .then((u) => {
-          if (u) {
-            setHasActivePass(Boolean(u.hasActiveSubscription));
+      apiGet('/subscription/status', token)
+        .then((res) => {
+          if (res && res.success) {
+            const isAuthorized = Boolean(res.access?.hasAccess || res.freePromo?.isFreeNow);
+            setHasActivePass(isAuthorized);
+            if (res.share) {
+              setUserShareData({
+                code: res.share.code || '',
+                shareUrl: res.share.shareUrl || '',
+                targetShares: res.share.targetShares || 3,
+                totalShares: res.share.totalShares || 0,
+                totalReferrals: res.share.totalReferrals || 0,
+                monthlyPrice: res.subscription?.monthlyPrice || 199,
+              });
+            }
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          apiGet('/auth/me', token)
+            .then((u) => {
+              if (u) setHasActivePass(Boolean(u.hasActiveSubscription));
+            })
+            .catch(() => {});
+        });
     }).catch(() => setLoading(false));
   }, [token, tournamentId, sortBy]);
 
@@ -261,10 +296,7 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
     }
 
     if (!existingTeam && hasActivePass === false) {
-      setError('Active Monthly Subscription or Referral Pass is required to enter tournaments. Redirecting...');
-      setTimeout(() => {
-        router.push(`/subscription?reason=tournament_access&tournamentId=${tournamentId}`);
-      }, 1000);
+      setAccessModalOpen(true);
       return;
     }
 
@@ -324,6 +356,8 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
           balance: walletBalance ?? 0,
           needed: Math.max(0, fee - (walletBalance ?? 0))
         });
+      } else if (errMsg.includes('Subscription') || errMsg.includes('Share')) {
+        setAccessModalOpen(true);
       } else {
         setError(errMsg);
       }
@@ -790,6 +824,223 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
               {selected.has(modalCreator.id) ? 'Remove from Squad' : 'Draft to 3D Lineup'}
             </button>
           </TiltCard3D>
+        </div>
+      )}
+
+      {/* ★★★ YA TOH SUBSCRIPTION LO YA FIR SHARE KARO MODAL ★★★ */}
+      {accessModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="max-w-xl w-full glass-card p-6 md:p-8 border border-white/20 space-y-6 shadow-2xl relative"
+          >
+            <div className="flex items-start justify-between border-b border-white/10 pb-4">
+              <div>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 mb-2">
+                  <Lock size={12} /> Entry Locked
+                </span>
+                <h3 className="text-xl md:text-2xl font-black text-white">
+                  Ya toh Subscription lo ya fir Share karo!
+                </h3>
+                <p className="text-xs text-text-secondary mt-1">
+                  Iss league me team enter karne ke liye VIP pass lein ya fir <b>{userShareData.targetShares} doston</b> ke saath website share karke 100% Free unlock karein!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAccessModalOpen(false)}
+                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center font-bold text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Sharing Live Progress Tracker */}
+            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
+              <div className="flex justify-between text-xs font-bold">
+                <span className="text-white flex items-center gap-1.5">
+                  <Share2 size={14} className="text-emerald-400" /> Free Sharing Progress:
+                </span>
+                <span className="text-emerald-400 font-mono font-black text-sm">
+                  {Math.max(userShareData.totalShares, userShareData.totalReferrals)} / {userShareData.targetShares}
+                </span>
+              </div>
+              <div className="w-full h-2.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-neon-cyan transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, Math.round((Math.max(userShareData.totalShares, userShareData.totalReferrals) / userShareData.targetShares) * 100))}%`
+                  }}
+                />
+              </div>
+              <p className="text-[11px] text-text-secondary">
+                {Math.max(userShareData.totalShares, userShareData.totalReferrals) >= userShareData.targetShares
+                  ? '🎉 Requirement Complete! You can enter tournaments for FREE.'
+                  : `Share with ${Math.max(0, userShareData.targetShares - Math.max(userShareData.totalShares, userShareData.totalReferrals))} more friends to unlock free access.`}
+              </p>
+            </div>
+
+            {/* Two Action Columns */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Option 1: Share to Play Free */}
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-black">
+                      1
+                    </div>
+                    <h4 className="font-bold text-sm text-white">Share Kar Ke Free Kholo</h4>
+                  </div>
+                  <p className="text-[11px] text-text-secondary">
+                    WhatsApp ya Telegram pe share karein:
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await apiPost('/subscription/record-share', { platform: 'whatsapp' }, token);
+                        setUserShareData(prev => ({ ...prev, totalShares: prev.totalShares + 1 }));
+                        if (Math.max(userShareData.totalShares + 1, userShareData.totalReferrals) >= userShareData.targetShares) {
+                          setHasActivePass(true);
+                        }
+                      } catch (e) {}
+                      const msg = `🔥 Join Creator11 (Creator Fantasy League)! Use my promo code: *${userShareData.code}*\n\nSign up: ${userShareData.shareUrl}`;
+                      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
+                    }}
+                    className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20"
+                  >
+                    <MessageCircle size={14} /> Share on WhatsApp
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await apiPost('/subscription/record-share', { platform: 'telegram' }, token);
+                        setUserShareData(prev => ({ ...prev, totalShares: prev.totalShares + 1 }));
+                        if (Math.max(userShareData.totalShares + 1, userShareData.totalReferrals) >= userShareData.targetShares) {
+                          setHasActivePass(true);
+                        }
+                      } catch (e) {}
+                      const msg = `🔥 Join Creator11! Code: ${userShareData.code}`;
+                      window.open(`https://t.me/share/url?url=${encodeURIComponent(userShareData.shareUrl)}&text=${encodeURIComponent(msg)}`, '_blank');
+                    }}
+                    className="w-full py-2 px-3 bg-[#229ED9] hover:bg-[#229ED9]/80 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#229ED9]/20"
+                  >
+                    <Send size={14} /> Share on Telegram
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await apiPost('/subscription/record-share', { platform: 'copy_link' }, token);
+                        setUserShareData(prev => ({ ...prev, totalShares: prev.totalShares + 1 }));
+                        if (Math.max(userShareData.totalShares + 1, userShareData.totalReferrals) >= userShareData.targetShares) {
+                          setHasActivePass(true);
+                        }
+                      } catch (e) {}
+                      navigator.clipboard.writeText(userShareData.shareUrl);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                    className="w-full py-2 px-3 bg-white/5 hover:bg-white/10 text-text-secondary hover:text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all border border-white/5"
+                  >
+                    {copiedLink ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                    {copiedLink ? 'Link Copied!' : 'Copy Invite Link'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Buy VIP Monthly Pass */}
+              <div className="p-4 rounded-xl bg-neon-gold/5 border border-neon-gold/20 space-y-3 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-7 h-7 rounded-lg bg-neon-gold/20 text-neon-gold flex items-center justify-center text-xs font-black">
+                      2
+                    </div>
+                    <h4 className="font-bold text-sm text-white">VIP Monthly Pass</h4>
+                  </div>
+                  <p className="text-[11px] text-text-secondary">
+                    Bina kisi share ke turant 30 days ke liye unlocked:
+                  </p>
+                  <div className="mt-2 text-2xl font-black text-neon-gold">
+                    ₹{userShareData.monthlyPrice}
+                    <span className="text-[10px] text-text-muted font-normal"> / 30 din</span>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    disabled={purchasingPass}
+                    onClick={async () => {
+                      setPurchasingPass(true);
+                      try {
+                        const res = await apiPost('/subscription/purchase', {}, token);
+                        if (res && res.success) {
+                          setHasActivePass(true);
+                          setAccessModalOpen(false);
+                          // Auto trigger save
+                          setTimeout(() => {
+                            handleSave();
+                          }, 300);
+                        }
+                      } catch (err: any) {
+                        if (err.message?.toLowerCase().includes('insufficient')) {
+                          router.push(`/wallet?required=${userShareData.monthlyPrice}`);
+                        } else {
+                          alert(err.message || 'Purchase failed');
+                        }
+                      } finally {
+                        setPurchasingPass(false);
+                      }
+                    }}
+                    className="w-full py-2.5 px-3 bg-gradient-to-r from-neon-gold to-amber-500 text-black font-extrabold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-neon-gold/20 disabled:opacity-50"
+                  >
+                    <Crown size={14} />
+                    {purchasingPass ? 'Activating Pass...' : `Buy Pass (₹${userShareData.monthlyPrice})`}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setAccessModalOpen(false)}
+                className="text-xs text-text-muted hover:text-white transition-colors"
+              >
+                Back to Team Lineup
+              </button>
+
+              {Math.max(userShareData.totalShares, userShareData.totalReferrals) >= userShareData.targetShares ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasActivePass(true);
+                    setAccessModalOpen(false);
+                    setTimeout(() => handleSave(), 200);
+                  }}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-neon-cyan text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20"
+                >
+                  <CheckCircle2 size={14} /> Continue &amp; Save Team Now
+                </button>
+              ) : (
+                <Link
+                  href="/subscription"
+                  className="text-xs text-neon-cyan hover:underline font-bold flex items-center gap-1"
+                >
+                  View Full Pass Hub &rarr;
+                </Link>
+              )}
+            </div>
+          </motion.div>
         </div>
       )}
     </div>

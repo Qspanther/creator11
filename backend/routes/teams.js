@@ -123,35 +123,51 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'This tournament contest is locked. New team entries are closed.' });
     }
 
-    // ★★★ TOURNAMENT ACCESS GATE: Check Active Subscription or Referral Pass ★★★
+    // ★★★ TOURNAMENT ACCESS GATE: Free Mode vs (Subscription OR Share) ★★★
     if (!isBotBypass) {
       const subEnabledSetting = await SystemSetting.findOne({ where: { key: 'subscription_enabled' } });
       const isSubCheckEnabled = !subEnabledSetting || subEnabledSetting.value === 'true';
 
+      // 1. Check Master Switch
       if (isSubCheckEnabled) {
-        const user = await User.findByPk(req.userId);
-        const hasActivePass = user && user.subscription_active_until && new Date(user.subscription_active_until) > now;
-        if (!hasActivePass && user?.role !== 'admin') {
-          const priceSetting = await SystemSetting.findOne({ where: { key: 'subscription_monthly_price' } });
-          const monthlyPrice = priceSetting ? parseFloat(priceSetting.value) : 199;
+        // 2. Check Free Access Mode
+        const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' } });
+        const isFreeMode = freeModeSetting && freeModeSetting.value === 'true';
 
-          const round = user ? user.referral_round || 1 : 1;
-          const targetSetting = await SystemSetting.findOne({ where: { key: `referral_round_${round}_target` } });
-          const daysSetting = await SystemSetting.findOne({ where: { key: `referral_round_${round}_days` } });
+        // 3. Check Free Until Date
+        const freeUntilSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_until' } });
+        const isWithinFreeWindow = freeUntilSetting?.value && new Date(freeUntilSetting.value) > now;
 
-          const target = targetSetting ? parseInt(targetSetting.value) : 2;
-          const rewardDays = daysSetting ? parseInt(daysSetting.value) : 15;
+        // If not free for all, verify individual user pass or share progress
+        if (!isFreeMode && !isWithinFreeWindow) {
+          const user = await User.findByPk(req.userId);
+          const isAdminUser = user && user.role === 'admin';
+          const hasActivePass = user && user.subscription_active_until && new Date(user.subscription_active_until) > now;
 
-          return res.status(403).json({
-            error: 'Active Monthly Subscription or Referral Pass required to enter tournaments.',
-            requiresSubscription: true,
-            monthlyPrice,
-            referralCode: user ? user.referral_code : '',
-            referralRound: round,
-            referralsInRound: user ? user.referrals_in_current_round || 0 : 0,
-            targetForRound: target,
-            rewardDaysForRound: rewardDays,
-          });
+          const targetSetting = await SystemSetting.findOne({ where: { key: 'share_unlock_target' } });
+          const targetShares = targetSetting ? parseInt(targetSetting.value, 10) : 3;
+
+          const totalShares = user ? (user.total_shares_count || 0) : 0;
+          const totalReferrals = user ? (user.total_referrals_count || 0) : 0;
+          const hasReachedShareTarget = Math.max(totalShares, totalReferrals) >= targetShares;
+
+          if (!isAdminUser && !hasActivePass && !hasReachedShareTarget) {
+            const priceSetting = await SystemSetting.findOne({ where: { key: 'subscription_monthly_price' } });
+            const monthlyPrice = priceSetting ? parseFloat(priceSetting.value) : 199;
+
+            return res.status(403).json({
+              error: 'Ya toh Subscription lo ya fir doston ke saath website Share karo!',
+              requiresSubscriptionOrShare: true,
+              requiresSubscription: true,
+              monthlyPrice,
+              targetShares,
+              totalShares,
+              totalReferrals,
+              sharesNeeded: Math.max(0, targetShares - Math.max(totalShares, totalReferrals)),
+              referralCode: user ? user.referral_code : '',
+              shareUrl: `${config.FRONTEND_URL}/signup?ref=${user?.referral_code || ''}`,
+            });
+          }
         }
       }
     }

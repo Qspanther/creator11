@@ -14,6 +14,7 @@ const Notification = require('./Notification');
 const Contest = require('./Contest');
 const ContestParticipant = require('./ContestParticipant');
 const ReferralLog = require('./ReferralLog');
+const ShareLog = require('./ShareLog');
 
 // ─── Associations ───
 
@@ -24,6 +25,10 @@ Wallet.belongsTo(User, { foreignKey: 'user_id' });
 // Wallet <-> Transaction (1:N)
 Wallet.hasMany(Transaction, { foreignKey: 'wallet_id', as: 'transactions' });
 Transaction.belongsTo(Wallet, { foreignKey: 'wallet_id' });
+
+// User <-> ShareLog (1:N)
+User.hasMany(ShareLog, { foreignKey: 'user_id', as: 'shareLogs' });
+ShareLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 // User <-> Team (1:N)
 User.hasMany(Team, { foreignKey: 'user_id', as: 'teams' });
@@ -110,5 +115,6 @@ module.exports = {
   ContestParticipant,
   BotWinHistory,
   ReferralLog,
+  ShareLog,
 };
 

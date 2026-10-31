@@ -364,9 +364,24 @@ router.get('/me', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const now = new Date();
-    const hasActiveSubscription = (user.is_bot || user.role === 'admin')
-      ? true
-      : Boolean(user.subscription_active_until && new Date(user.subscription_active_until) > now);
+
+    // Check free access mode & promotional free window
+    const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' } });
+    const isFreeMode = freeModeSetting && freeModeSetting.value === 'true';
+
+    const freeUntilSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_until' } });
+    const isWithinFreeWindow = freeUntilSetting?.value && new Date(freeUntilSetting.value) > now;
+
+    const targetSetting = await SystemSetting.findOne({ where: { key: 'share_unlock_target' } });
+    const targetShares = targetSetting ? parseInt(targetSetting.value, 10) : 3;
+
+    const totalShares = user.total_shares_count || 0;
+    const totalReferrals = user.total_referrals_count || 0;
+    const hasMetShareTarget = Math.max(totalShares, totalReferrals) >= targetShares;
+
+    const hasPaidOrEarnedPass = Boolean(user.subscription_active_until && new Date(user.subscription_active_until) > now);
+
+    const hasActiveSubscription = (user.is_bot || user.role === 'admin' || isFreeMode || isWithinFreeWindow || hasPaidOrEarnedPass || hasMetShareTarget);
 
     res.json({
       id: user.id,
@@ -380,9 +395,11 @@ router.get('/me', async (req, res) => {
       subscriptionActiveUntil: user.subscription_active_until,
       subscriptionType: user.subscription_type,
       hasActiveSubscription,
-      referralRound: user.referral_round || 1,
-      referralsInCurrentRound: user.referrals_in_current_round || 0,
-      totalReferralsCount: user.total_referrals_count || 0,
+      isFreeModeActive: (isFreeMode || isWithinFreeWindow),
+      freeUntil: isWithinFreeWindow ? freeUntilSetting.value : null,
+      totalSharesCount: totalShares,
+      totalReferralsCount: totalReferrals,
+      targetShares,
     });
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });

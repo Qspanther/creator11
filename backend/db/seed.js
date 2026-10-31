@@ -171,4 +171,11 @@ if (require.main === module) {
   seed().then(() => process.exit(0));
 }
 
-module.exports = { seed };
+async function seedTournaments() {
+  const tournaments = generateTournaments();
+  await Tournament.bulkCreate(tournaments);
+  console.log('✅ Seeded ' + tournaments.length + ' default tournaments');
+  return tournaments;
+}
+
+module.exports = { seed, seedTournaments };

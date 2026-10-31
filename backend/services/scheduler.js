@@ -17,16 +17,15 @@ const { deployPreContestBots, deployAutonomousBots, registerStaggeredBots } = re
 function startScheduler() {
   console.log('⏰ Starting tournament scheduler with 1100-Bot Automation...');
 
-  // Run every minute to check tournament state transitions
-  cron.schedule('* * * * *', async () => {
+  // Dedicated 10-second ticker: Organic staggered bot registration in real-time
+  let isBotTickActive = false;
+  setInterval(async () => {
+    if (isBotTickActive) return;
+    isBotTickActive = true;
     try {
-      const now = new Date();
-
-            // 0. Pre-Contest & Active: Ensure bots are actively registering for upcoming, locked, and live tournaments
       const activeTournaments = await Tournament.findAll({
         where: {
           status: { [Op.in]: ['upcoming', 'locked', 'live'] },
-          platform: 'youtube', // Focus on YouTube league
         },
       });
 
@@ -34,9 +33,20 @@ function startScheduler() {
         try {
           await registerStaggeredBots(t.id);
         } catch (staggerErr) {
-          console.error(`⚠️ Error in staggered bot registration for ${t.name}:`, staggerErr.message);
+          console.error(`⚠️ Error in staggered bot ticker for ${t.name}:`, staggerErr.message);
         }
       }
+    } catch (err) {
+      console.error('⚠️ Staggered bot ticker error:', err.message);
+    } finally {
+      isBotTickActive = false;
+    }
+  }, 10000);
+
+  // Run every minute to check tournament state transitions
+  cron.schedule('* * * * *', async () => {
+    try {
+      const now = new Date();
 
       // 1. Lock tournaments that have passed their lock_time
       const toLock = await Tournament.findAll({

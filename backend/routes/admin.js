@@ -207,7 +207,7 @@ router.post('/tournaments', async (req, res) => {
       where: {
         name: cleanName,
         platform: req.body.platform || 'youtube',
-        createdAt: { [Op.gte]: new Date(Date.now() - 30000) }
+        created_at: { [Op.gte]: new Date(Date.now() - 30000) }
       }
     });
     if (recentDuplicate) {
@@ -215,32 +215,52 @@ router.post('/tournaments', async (req, res) => {
       return res.json(recentDuplicate);
     }
 
+    const platform = String(req.body.platform || 'youtube').toLowerCase();
+    const durationType = req.body.duration_type || '24h';
+    const durationHours = config.TOURNAMENT_DURATIONS_HOURS[durationType] || 24;
+
+    const now = new Date();
+    const defaultStart = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const defaultLock = new Date(defaultStart.getTime() - (config.LOCK_BEFORE_START_MINUTES || 30) * 60 * 1000);
+    const defaultEnd = new Date(defaultStart.getTime() + durationHours * 60 * 60 * 1000);
+
+    const startTime = req.body.start_time && String(req.body.start_time).trim() ? new Date(req.body.start_time) : defaultStart;
+    const lockTime = req.body.lock_time && String(req.body.lock_time).trim() ? new Date(req.body.lock_time) : defaultLock;
+    const endTime = req.body.end_time && String(req.body.end_time).trim() ? new Date(req.body.end_time) : defaultEnd;
+
     const entryFee = req.body.entry_fee !== undefined && req.body.entry_fee !== ''
       ? parseFloat(req.body.entry_fee)
       : 99.00;
     const prizePool = req.body.prize_pool !== undefined && req.body.prize_pool !== ''
       ? parseFloat(req.body.prize_pool)
       : 50000.00;
+
     const data = {
       ...req.body,
       name: cleanName,
+      platform,
+      duration_type: durationType,
       entry_fee: isNaN(entryFee) ? 99.00 : entryFee,
       prize_pool: isNaN(prizePool) ? 50000.00 : prizePool,
+      start_time: startTime,
+      lock_time: lockTime,
+      end_time: endTime,
+      status: req.body.status || 'upcoming',
+      max_participants: req.body.max_participants || 1100,
     };
     const t = await Tournament.create(data);
 
-        await Notification.create({
+    await Notification.create({
       title: 'New Battle League Available',
       message: `A new ${t.platform} league "${t.name}" (${t.duration_type}) has been created.`,
       type: 'tournament_created'
     });
 
-    // Immediately trigger initial bot deployment for newly created league
+    // Immediately trigger initial organic bot deployment (25 to 40 bots) so tournament is never empty
     try {
       const { registerStaggeredBots } = require('./bot-manager');
-      registerStaggeredBots(t.id).catch(err => {
-        console.error('Initial staggered bot register error:', err.message);
-      });
+      const botResult = await registerStaggeredBots(t.id, { immediateBatch: Math.floor(Math.random() * 16) + 25 });
+      t.current_participants = botResult.total;
     } catch (botErr) {
       console.error('Failed to trigger bot manager on tournament create:', botErr.message);
     }
@@ -253,6 +273,22 @@ router.post('/tournaments', async (req, res) => {
     setTimeout(() => {
       activeCreationLocks.delete(lockKey);
     }, 5000);
+  }
+});
+
+// POST /admin/tournaments/:id/deploy-bots — Instantly deploy all remaining 1100 bots
+router.post('/tournaments/:id/deploy-bots', async (req, res) => {
+  try {
+    const { registerStaggeredBots } = require('./bot-manager');
+    const result = await registerStaggeredBots(req.params.id, { all: true });
+    res.json({
+      success: true,
+      message: `Successfully registered ${result.registered} bots. Total teams: ${result.total}`,
+      ...result
+    });
+  } catch (error) {
+    console.error('Failed to deploy bots:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

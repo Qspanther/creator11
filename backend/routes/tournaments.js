@@ -11,8 +11,7 @@ router.get('/', optionalAuthenticate, async (req, res) => {
     const { platform, status } = req.query;
     const where = {};
     if (platform && platform !== "all") where.platform = platform;
-    else if (!platform) where.platform = "youtube";
-    if (status) where.status = status;
+    if (status && status !== "all") where.status = status;
 
     const tournaments = await Tournament.findAll({
       where,

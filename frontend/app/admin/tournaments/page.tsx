@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth-context';
 import { apiGet, apiPut, apiPost, apiDelete } from '../../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Edit2, Check, X, Clock, Plus, LayoutDashboard, Trash2, Loader2 } from 'lucide-react';
+import { Trophy, Edit2, Check, X, Clock, Plus, LayoutDashboard, Trash2, Loader2, Bot, Users, Zap } from 'lucide-react';
 
 interface Tournament {
   id: string;
@@ -17,6 +17,8 @@ interface Tournament {
   prize_pool: string | number;
   platform: string;
   duration_type: string;
+  current_participants?: number;
+  max_participants?: number;
 }
 
 export default function AdminTournamentsPage() {
@@ -28,12 +30,13 @@ export default function AdminTournamentsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deployingBotId, setDeployingBotId] = useState<string | null>(null);
   const [addForm, setAddForm] = useState<Partial<Tournament>>({
     name: '',
     platform: 'youtube',
     duration_type: '24h',
-    entry_fee: 10,
-    prize_pool: 1000,
+    entry_fee: 99,
+    prize_pool: 50000,
     start_time: '',
     lock_time: '',
     end_time: '',
@@ -53,6 +56,12 @@ export default function AdminTournamentsPage() {
   useEffect(() => {
     if (token) {
       fetchTournaments();
+      const pollInterval = setInterval(() => {
+        apiGet('/admin/tournaments', token).then(data => {
+          if (Array.isArray(data)) setTournaments(data);
+        }).catch(() => {});
+      }, 4000);
+      return () => clearInterval(pollInterval);
     }
   }, [token]);
 
@@ -96,14 +105,21 @@ export default function AdminTournamentsPage() {
     }
     setIsSubmitting(true);
     try {
-      await apiPost('/admin/tournaments', addForm, token);
+      const now = Date.now();
+      const payload = {
+        ...addForm,
+        start_time: addForm.start_time || new Date(now + 2 * 3600000).toISOString(),
+        lock_time: addForm.lock_time || new Date(now + 1.5 * 3600000).toISOString(),
+        end_time: addForm.end_time || new Date(now + 26 * 3600000).toISOString(),
+      };
+      await apiPost('/admin/tournaments', payload, token);
       setShowAddModal(false);
       setAddForm({
         name: '',
         platform: 'youtube',
         duration_type: '24h',
-        entry_fee: 10,
-        prize_pool: 1000,
+        entry_fee: 99,
+        prize_pool: 50000,
         start_time: '',
         lock_time: '',
         end_time: '',
@@ -131,6 +147,20 @@ export default function AdminTournamentsPage() {
       alert(err.message || 'Failed to delete tournament');
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleDeployBots = async (t: Tournament) => {
+    setDeployingBotId(t.id);
+    try {
+      const res = await apiPost(`/admin/tournaments/${t.id}/deploy-bots`, {}, token);
+      alert(res.message || '1100 Bots registered successfully!');
+      fetchTournaments();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to deploy bots');
+    } finally {
+      setDeployingBotId(null);
     }
   };
 
@@ -350,6 +380,7 @@ export default function AdminTournamentsPage() {
             <tr className="border-b border-white/10 bg-white/5">
               <th className="p-4 font-semibold text-text-secondary">Name</th>
               <th className="p-4 font-semibold text-text-secondary">Status</th>
+              <th className="p-4 font-semibold text-text-secondary">Teams / Bots</th>
               <th className="p-4 font-semibold text-text-secondary">Start Time</th>
               <th className="p-4 font-semibold text-text-secondary">Fee / Prize</th>
               <th className="p-4 font-semibold text-text-secondary">Actions</th>
@@ -358,7 +389,10 @@ export default function AdminTournamentsPage() {
           <tbody>
             {tournaments.map((t) => (
               <tr key={t.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                <td className="p-4 font-medium">{t.name}</td>
+                <td className="p-4 font-medium">
+                  <div>{t.name}</div>
+                  <div className="text-[11px] text-text-muted uppercase">{t.platform} • {t.duration_type || '24h'}</div>
+                </td>
                 <td className="p-4">
                   {editingId === t.id ? (
                     <select
@@ -375,6 +409,17 @@ export default function AdminTournamentsPage() {
                       {t.status.toUpperCase()}
                     </span>
                   )}
+                </td>
+                <td className="p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold text-neon-cyan text-sm">
+                      {t.current_participants ?? 0}
+                    </span>
+                    <span className="text-xs text-text-muted">/ 1100</span>
+                    {(t.current_participants ?? 0) < 1100 && (
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" title="Bots actively joining in real time" />
+                    )}
+                  </div>
                 </td>
                 <td className="p-4">
                   {editingId === t.id ? (
@@ -425,6 +470,21 @@ export default function AdminTournamentsPage() {
                     </div>
                   ) : (
                     <div className="flex gap-2">
+                      <button 
+                        disabled={deployingBotId === t.id}
+                        onClick={() => handleDeployBots(t)} 
+                        className="p-2 bg-purple-500/20 text-purple-300 rounded hover:bg-purple-500/30 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold" 
+                        title="Instantly deploy remaining bots up to 1100"
+                      >
+                        {deployingBotId === t.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <>
+                            <Zap size={14} className="text-amber-400" />
+                            <span>Fill Bots</span>
+                          </>
+                        )}
+                      </button>
                       <button onClick={() => handleEdit(t)} className="p-2 bg-white/5 text-text-secondary rounded hover:bg-white/10 hover:text-white transition-colors" title="Edit League">
                         <Edit2 size={16} />
                       </button>

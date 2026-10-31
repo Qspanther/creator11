@@ -239,7 +239,7 @@ async function deployPreContestBots(tournamentId) {
 // ─── CORE ENGINE FUNCTION: Staggered Random Bot Registration ───
 // Gradually registers bots randomly over time as the tournament approaches lock_time.
 // Ensures 100% of all 1100 bots have valid teams registered BEFORE the contest locks!
-async function registerStaggeredBots(tournamentId) {
+async function registerStaggeredBots(tournamentId, options = {}) {
   const tournament = await Tournament.findByPk(tournamentId);
   if (!tournament) return { registered: 0 };
   // Only skip if tournament is already completed
@@ -268,30 +268,39 @@ async function registerStaggeredBots(tournamentId) {
     if (tournament.current_participants !== totalCount) {
       await tournament.update({ current_participants: totalCount });
     }
-    return { registered: 0, total: 1100, remaining: 0 };
+    return { registered: 0, total: totalCount, remaining: 0 };
   }
 
   // Calculate timing to lock_time (fallback start_time)
-  const targetLock = new Date(tournament.lock_time || tournament.start_time).getTime();
+  const targetLock = new Date(tournament.lock_time || tournament.start_time || (Date.now() + 3600000)).getTime();
   const msUntilLock = Math.max(0, targetLock - Date.now());
   const minutesUntilLock = Math.floor(msUntilLock / 60000);
 
   let batchSize = 1;
 
-  if (tournament.status === 'locked' || tournament.status === 'live' || minutesUntilLock <= 2 || msUntilLock <= 0) {
-    // 2 minutes or less until lock, or already locked/live: register ALL remaining bots immediately
+  if (options.all || tournament.status === 'locked' || tournament.status === 'live' || minutesUntilLock <= 2 || msUntilLock <= 0) {
+    // 2 minutes or less until lock, or already locked/live/requested all: register ALL remaining bots immediately
     batchSize = unregisteredBots.length;
+  } else if (options.immediateBatch) {
+    batchSize = Math.min(unregisteredBots.length, options.immediateBatch);
+  } else if (existingTeams.length === 0) {
+    // Initial organic entry for brand-new league: 20 to 35 bots immediately so it's never 0
+    batchSize = Math.min(unregisteredBots.length, Math.floor(Math.random() * 16) + 20);
   } else {
-    // Staggered pacing: ensure steady batches so bots join actively
+    // Staggered pacing: steady random batches of 5 to 15 bots so bots join actively
     const idealPace = Math.ceil(unregisteredBots.length / Math.max(1, minutesUntilLock));
-    const minBatch = Math.max(5, idealPace);
-    const maxBatch = Math.min(unregisteredBots.length, Math.max(25, Math.ceil(idealPace * 2)));
+    const minBatch = Math.max(4, Math.min(15, idealPace));
+    const maxBatch = Math.min(unregisteredBots.length, Math.max(12, Math.min(30, idealPace * 2)));
     batchSize = Math.floor(Math.random() * (maxBatch - minBatch + 1)) + minBatch;
   }
 
   const botsToRegister = unregisteredBots.slice(0, batchSize);
 
-  const creators = await Creator.findAll({ where: { platform: tournament.platform } });
+  const platform = String(tournament.platform || 'youtube').toLowerCase();
+  let creators = await Creator.findAll({ where: { platform } });
+  if (creators.length < config.TOTAL_TEAM_SIZE) {
+    creators = await Creator.findAll();
+  }
   if (creators.length < config.TOTAL_TEAM_SIZE) {
     throw new Error(`Not enough creators available for platform ${tournament.platform}`);
   }

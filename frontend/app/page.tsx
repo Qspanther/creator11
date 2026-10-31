@@ -41,7 +41,7 @@ export default function LandingPage3D() {
           <p className="text-slate-300 text-base sm:text-lg max-w-2xl leading-relaxed">
             Instead of cricket or football athletes, draft your 11-creator entertainment lineup from 50 top YouTube & Instagram stars inside an interactive 3D stadium. Earn real-time points from Views, Likes, Engagement Velocity, and 2.0x Captain multipliers.
           </p>
-          <div className="flex flex-wrap gap-3.5 pt-2">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 sm:gap-3.5 pt-2">
             <Link
               href={`/team-builder/${tournaments[0]?.id || 't-yt-24h'}`}
               onClick={() => playSpatialSFX('power')}
@@ -65,21 +65,21 @@ export default function LandingPage3D() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-4">
-            <TiltCard3D className="p-3.5">
-              <div className="text-xs text-slate-400">Verified Creators</div>
-              <div className="text-xl sm:text-2xl font-black text-white mt-0.5">50 Holo-Stars</div>
-              <div className="text-[11px] text-cyan-300">25 YouTube • 25 Instagram</div>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-3 sm:pt-4">
+            <TiltCard3D className="p-2 sm:p-3.5 text-center sm:text-left">
+              <div className="text-[10px] sm:text-xs text-slate-400">Verified Creators</div>
+              <div className="text-sm sm:text-2xl font-black text-white mt-0.5">50 Stars</div>
+              <div className="text-[9px] sm:text-[11px] text-cyan-300 truncate">25 YT • 25 IG</div>
             </TiltCard3D>
-            <TiltCard3D className="p-3.5">
-              <div className="text-xs text-slate-400">Total Prize Pool</div>
-              <div className="text-xl sm:text-2xl font-black text-amber-300 mt-0.5">₹4,50,000</div>
-              <div className="text-[11px] text-emerald-400">Instant Wallet Payouts</div>
+            <TiltCard3D className="p-2 sm:p-3.5 text-center sm:text-left">
+              <div className="text-[10px] sm:text-xs text-slate-400">Prize Pool</div>
+              <div className="text-sm sm:text-2xl font-black text-amber-300 mt-0.5 font-mono">₹4.5L</div>
+              <div className="text-[9px] sm:text-[11px] text-emerald-400 truncate">Instant Payouts</div>
             </TiltCard3D>
-            <TiltCard3D className="p-3.5">
-              <div className="text-xs text-slate-400">Roster Cap</div>
-              <div className="text-xl sm:text-2xl font-black text-purple-300 mt-0.5">11 Creators</div>
-              <div className="text-[11px] text-slate-300">100.0 Credit Budget</div>
+            <TiltCard3D className="p-2 sm:p-3.5 text-center sm:text-left">
+              <div className="text-[10px] sm:text-xs text-slate-400">Roster Cap</div>
+              <div className="text-sm sm:text-2xl font-black text-purple-300 mt-0.5">11 Stars</div>
+              <div className="text-[9px] sm:text-[11px] text-slate-300 truncate">100.0 CR Budget</div>
             </TiltCard3D>
           </div>
         </div>

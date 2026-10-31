@@ -404,3 +404,45 @@ button, [role="button"], a {
   color: #ffffff;
   box-shadow: 0 0 20px rgba(168, 85, 247, 0.3);
 }
+
+/* ─── Mobile Precision & Touch Ergonomics (iOS & Android) ─── */
+@media (max-width: 640px) {
+  .stadium-pitch-wrapper {
+    perspective: 700px !important;
+  }
+
+  .stadium-pitch-surface {
+    transform: rotateX(min(var(--pitch-angle, 10deg), 12deg)) !important;
+    padding: 14px 6px !important;
+    min-height: 420px !important;
+    border-radius: 20px !important;
+  }
+
+  .pedestal-slot {
+    transform: translateZ(12px) !important;
+    width: 68px !important;
+    height: 76px !important;
+    padding: 4px !important;
+  }
+
+  .pedestal-slot:hover {
+    transform: translateZ(16px) scale(1.02) !important;
+  }
+
+  /* Compact Pedestal typography on small phones */
+  .pedestal-slot .player-name {
+    font-size: 8.5px !important;
+    line-height: 1.1 !important;
+  }
+
+  .pedestal-slot .avatar-circle {
+    width: 26px !important;
+    height: 26px !important;
+    font-size: 9px !important;
+  }
+
+  /* Safe area padding for mobile bottom bar */
+  body {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+}

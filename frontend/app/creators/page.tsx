@@ -69,15 +69,15 @@ export default function CreatorsVaultPage3D() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto">
+          <div className="relative w-full sm:w-auto">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search creators..."
-              className="!pl-9 pr-3 py-2 bg-slate-900/90 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
+              className="w-full sm:w-60 !pl-9 pr-3 py-2 bg-slate-900/90 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
             />
           </div>
 
@@ -88,7 +88,7 @@ export default function CreatorsVaultPage3D() {
               setCategory(e.target.value);
             }}
             aria-label="Filter creators by category"
-            className="bg-slate-900/90 border border-white/15 rounded-xl px-3 py-2 text-xs font-semibold text-cyan-300 focus:outline-none focus:border-cyan-400"
+            className="w-full sm:w-auto bg-slate-900/90 border border-white/15 rounded-xl px-3 py-2 text-xs font-semibold text-cyan-300 focus:outline-none focus:border-cyan-400"
           >
             <option value="All">All Categories</option>
             <option value="Gaming">Gaming</option>
@@ -181,7 +181,7 @@ export default function CreatorsVaultPage3D() {
 
       {/* Creator Detail 3D Modal */}
       {modalCreator && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4">
           <TiltCard3D intensity={8} className="max-w-lg w-full p-6 border border-cyan-400/50 space-y-5">
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div className="flex items-center gap-3">

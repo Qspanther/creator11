@@ -60,6 +60,7 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'cost_desc' | 'cost_asc' | 'name'>('cost_desc');
   const [pitchTilt, setPitchTilt] = useState<number>(22);
+  const [mobileTab, setMobileTab] = useState<"pitch" | "creators">("pitch");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -470,9 +471,49 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
         </div>
       )}
 
+      {/* Mobile Segmented Switcher */}
+      <div className="lg:hidden flex items-center p-1.5 rounded-2xl bg-slate-900/90 border border-white/10 sticky top-[62px] z-20 backdrop-blur-xl shadow-lg">
+        <button
+          type="button"
+          onClick={() => {
+            playSpatialSFX('click');
+            setMobileTab('pitch');
+          }}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            mobileTab === 'pitch'
+              ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-extrabold'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span>🏟️ 3D Arena Pitch</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+            selected.size === 11 ? 'bg-emerald-400 text-black font-black' : 'bg-white/10 text-cyan-300'
+          }`}>
+            {selected.size}/11
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            playSpatialSFX('click');
+            setMobileTab('creators');
+          }}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            mobileTab === 'creators'
+              ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-md font-extrabold'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span>👥 Draft Creators</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/10 text-slate-300">
+            {creators.length}
+          </span>
+        </button>
+      </div>
+
       <div className="grid lg:grid-cols-12 gap-6 items-start">
         {/* Left 7 Cols: 3D Holographic Stadium Pitch */}
-        <div className="lg:col-span-7 space-y-3">
+        <div className={`lg:col-span-7 space-y-3 ${mobileTab === 'pitch' ? 'block' : 'hidden lg:block'}`}>
           <div className="flex items-center justify-between px-1">
             <div className="text-xs font-bold text-cyan-300">
               🏟️ 3D Holographic Arena Pitch <span className="text-slate-400 font-normal">(1-2-4-4 Tactical Formation)</span>
@@ -501,16 +542,16 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
                     <div className="text-center text-[10px] font-mono uppercase tracking-widest text-cyan-300/70">
                       {rowLabels[rIdx]}
                     </div>
-                    <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3">
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-3">
                       {rowIndices.map((slotIndex) => {
                         const player = selectedCreators[slotIndex];
                         if (!player) {
                           return (
                             <div
                               key={slotIndex}
-                              className="pedestal-slot flex flex-col items-center justify-center p-2 rounded-2xl border border-dashed border-cyan-400/35 bg-slate-950/60 w-24 sm:w-28 h-26 text-center"
+                              className="pedestal-slot flex flex-col items-center justify-center p-1.5 sm:p-2 rounded-2xl border border-dashed border-cyan-400/35 bg-slate-950/60 w-[68px] sm:w-28 h-[76px] sm:h-26 text-center"
                             >
-                              <div className="w-7 h-7 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-[11px] text-slate-400 font-mono">
+                              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-[10px] sm:text-[11px] text-slate-400 font-mono">
                                 #{slotIndex + 1}
                               </div>
                               <div className="text-[10px] text-slate-400 mt-1">Open Slot</div>
@@ -530,9 +571,9 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
                         return (
                           <div
                             key={slotIndex}
-                            className={`pedestal-slot pedestal-ring flex flex-col items-center justify-between p-2 rounded-2xl bg-gradient-to-b from-slate-900/95 to-purple-950/85 border ${
+                            className={`pedestal-slot pedestal-ring flex flex-col items-center justify-between p-1.5 sm:p-2 rounded-2xl bg-gradient-to-b from-slate-900/95 to-purple-950/85 border ${
                               isCap ? 'border-amber-400' : isVC ? 'border-purple-400' : 'border-cyan-400/50'
-                            } w-24 sm:w-28 h-26 text-center relative group`}
+                            } w-[68px] sm:w-28 h-[76px] sm:h-26 text-center relative group`}
                           >
                             <div className="flex items-center justify-between w-full">
                               {isCap ? (
@@ -559,7 +600,7 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
 
                             <div
                               onClick={() => setModalCreator(player)}
-                              className="w-8 h-8 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-xs text-slate-950 cursor-pointer shadow"
+                              className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-[10px] sm:text-xs text-slate-950 cursor-pointer shadow"
                             >
                               {initials}
                             </div>
@@ -628,7 +669,7 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
         </div>
 
         {/* Right 5 Cols: Filterable Creator Selection Pool */}
-        <div className="lg:col-span-5 holo-card p-5 rounded-3xl space-y-4">
+        <div className={`lg:col-span-5 holo-card p-3.5 sm:p-5 rounded-3xl space-y-4 ${mobileTab === 'creators' ? 'block' : 'hidden lg:block'}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-base font-extrabold text-white">YouTube Draft Pool ({creators.length})</h2>
             <span className="text-xs font-mono text-cyan-300">Verified Stats</span>
@@ -791,7 +832,7 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
 
       {/* Profile Detail 3D Modal */}
       {modalCreator && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4">
           <TiltCard3D intensity={8} className="max-w-md w-full p-6 border border-cyan-400/50 space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <h3 className="text-lg font-black text-white">{modalCreator.name}</h3>
@@ -833,7 +874,7 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="max-w-xl w-full glass-card p-6 md:p-8 border border-white/20 space-y-6 shadow-2xl relative"
+            className="max-w-xl w-full max-h-[90vh] overflow-y-auto glass-card p-4 sm:p-6 md:p-8 border border-white/20 space-y-5 shadow-2xl relative rounded-3xl"
           >
             <div className="flex items-start justify-between border-b border-white/10 pb-4">
               <div>

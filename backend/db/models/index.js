@@ -27,7 +27,7 @@ Transaction.belongsTo(Wallet, { foreignKey: 'wallet_id' });
 
 // User <-> Team (1:N)
 User.hasMany(Team, { foreignKey: 'user_id', as: 'teams' });
-Team.belongsTo(User, { foreignKey: 'user_id' });
+Team.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
 // Tournament <-> Team (1:N)
 Tournament.hasMany(Team, { foreignKey: 'tournament_id', as: 'teams' });

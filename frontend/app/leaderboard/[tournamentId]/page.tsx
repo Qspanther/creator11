@@ -296,7 +296,7 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-1.5">
                 <Users size={14} className="text-neon-purple" />
-                <span>{entries.length} Competitors</span>
+                <span>{tournament?.currentParticipants || entries.length} Competitors</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Sparkles size={14} className="text-neon-cyan" />
@@ -511,7 +511,7 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
                           {entry.totalPoints.toFixed(4)}
                         </p>
                         <p className="text-[9px] text-text-muted uppercase tracking-wider font-semibold">
-                          {showRankings ? 'Final Pts' : 'Live Pts'}
+                          {showRankings ? 'Final Pts' : tournament?.status === 'upcoming' ? 'Drafted' : 'Live Pts'}
                         </p>
                       </div>
 

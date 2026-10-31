@@ -63,6 +63,86 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
     const entryFee = parseFloat(tournament.entry_fee) || 99;
     const standardRefund = Math.max(0, entryFee - 2);
 
+    let formattedEntries = [];
+    let userRank = null;
+    let userPoints = null;
+    let userPrize = null;
+
+    if (entries.length > 0) {
+      formattedEntries = entries.map(e => {
+        const prizeAmt = parseFloat(e.prize_amount || 0);
+        const isRefund = prizeAmt < 100;
+        return {
+          rank: e.rank,
+          teamId: e.team_id,
+          userId: e.user_id,
+          userName: e.user ? e.user.name : 'Competitor',
+          userEmail: e.user_id === req.userId ? (e.user ? e.user.email : '') : undefined,
+          totalPoints: parseFloat(e.total_points || 0),
+          prizeAmount: prizeAmt,
+          refundAmount: isRefund ? (prizeAmt > 0 ? prizeAmt : standardRefund) : 0,
+          isRefund,
+          platformFee: isRefund ? 2 : 0,
+          isCurrentUser: e.user_id === req.userId,
+          canViewTeam: true,
+          status: tournament.status,
+        };
+      });
+
+      if (userEntry) {
+        userRank = userEntry.rank;
+        userPoints = parseFloat(userEntry.total_points || 0);
+        userPrize = parseFloat(userEntry.prize_amount || 0);
+      }
+    } else {
+      // ⚡ When leaderboard table has not been computed yet (e.g. upcoming tournament or freshly registered league),
+      // fetch all registered teams directly from Team table so all competitors appear live in real-time!
+      const registeredTeams = await Team.findAll({
+        where: { tournament_id: tournamentId },
+        order: [['created_at', 'ASC']],
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'name', 'email', 'is_bot'],
+          },
+        ],
+        limit: 1200,
+      });
+
+      formattedEntries = registeredTeams.map((t, idx) => {
+        const isCurrent = t.user_id === req.userId;
+        return {
+          rank: idx + 1,
+          teamId: t.id,
+          userId: t.user_id,
+          userName: t.user ? t.user.name : (t.user_id ? 'Player ' + t.user_id.slice(0, 5) : 'Competitor'),
+          userEmail: isCurrent ? (t.user ? t.user.email : '') : undefined,
+          totalPoints: 0.0000,
+          prizeAmount: 0,
+          refundAmount: standardRefund,
+          isRefund: false,
+          platformFee: 0,
+          isCurrentUser: isCurrent,
+          canViewTeam: true,
+          status: 'registered',
+        };
+      });
+
+      const userTeamIndex = registeredTeams.findIndex(t => t.user_id === req.userId);
+      if (userTeamIndex !== -1) {
+        userRank = userTeamIndex + 1;
+        userPoints = 0.0000;
+        userPrize = 0;
+      }
+    }
+
+    const totalRegisteredCount = await Team.count({ where: { tournament_id: tournamentId } });
+    const currentParticipants = Math.max(tournament.current_participants || 0, totalRegisteredCount, formattedEntries.length);
+    if (tournament.current_participants !== currentParticipants) {
+      tournament.update({ current_participants: currentParticipants }).catch(() => {});
+    }
+
     res.json({
       tournament: {
         id: tournament.id,
@@ -74,32 +154,15 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
         lockTime: tournament.lock_time,
         prizePool: parseFloat(tournament.prize_pool) || 0,
         entryFee: entryFee,
-        currentParticipants: tournament.current_participants || entries.length,
+        currentParticipants: currentParticipants,
         rankingsFinalized: tournament.rankings_finalized !== false && tournament.rankings_finalized !== 0,
       },
       canViewTeams,
-      entries: entries.map(e => {
-        const prizeAmt = parseFloat(e.prize_amount || 0);
-        const isRefund = prizeAmt < 100; // If prize < ₹100, it's a refund entry
-        return {
-          rank: e.rank,
-          teamId: e.team_id,
-          userId: e.user_id,
-          userName: e.user ? e.user.name : 'Unknown User',
-          userEmail: e.user_id === req.userId ? (e.user ? e.user.email : '') : undefined,
-          totalPoints: parseFloat(e.total_points),
-          prizeAmount: prizeAmt,
-          refundAmount: isRefund ? (prizeAmt > 0 ? prizeAmt : standardRefund) : 0,
-          isRefund,
-          platformFee: isRefund ? 2 : 0,
-          isCurrentUser: e.user_id === req.userId,
-          canViewTeam: true,
-        };
-      }),
+      entries: formattedEntries,
       creatorsPerformance,
-      userRank: userEntry ? userEntry.rank : null,
-      userPoints: userEntry ? parseFloat(userEntry.total_points) : null,
-      userPrize: userEntry ? parseFloat(userEntry.prize_amount || 0) : 0,
+      userRank,
+      userPoints,
+      userPrize,
     });
   } catch (error) {
     console.error('Get leaderboard error:', error);

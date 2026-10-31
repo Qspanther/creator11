@@ -86,7 +86,37 @@ app.use('/contests', require('./routes/contests'));
 app.use('/bot-manager', require('./routes/bot-manager'));
 app.use('/subscription', require('./routes/subscription'));
 
-// Health check
+// Health & Root status checks
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Creator11 API Engine</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #06060b; color: #fff; text-align: center; padding: 60px 20px; }
+          .card { max-width: 540px; margin: 0 auto; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+          h1 { color: #00f0ff; margin-bottom: 8px; font-size: 26px; }
+          p { color: #94a3b8; font-size: 15px; line-height: 1.6; }
+          .badge { display: inline-block; padding: 6px 14px; border-radius: 999px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #10b981; font-weight: bold; font-size: 13px; margin: 12px 0 20px; }
+          .btn { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, #a855f7, #06b6d4); color: #fff; text-decoration: none; font-weight: bold; border-radius: 12px; margin-top: 16px; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>⚡ Creator11 Backend API</h1>
+          <div class="badge">● Server Active &amp; Live</div>
+          <p>Creator11 Express Backend &amp; Scoring Engine is running successfully on Port 5000.</p>
+          <p>To use the full platform interface, open the frontend app below:</p>
+          <a class="btn" href="http://localhost:3000">Open Creator11 Web App (Port 3000) &rarr;</a>
+        </div>
+      </body>
+    </html>
+  `);
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -174,13 +204,18 @@ async function start() {
     startYouTubeTracker();
 
     // Start listening
-    const HOST = process.env.HOST || '0.0.0.0';
-    app.listen(config.PORT, HOST, () => {
-      console.log(`ðŸš€ Creator11 API running on http://localhost:${config.PORT}`);
-      console.log(`ðŸ“‹ Config endpoint: http://localhost:${config.PORT}/api/config`);
-      console.log(`ðŸ¥ Health check: http://localhost:${config.PORT}/health`);
-      console.log(`ðŸ¤– Bot Manager endpoint: http://localhost:${config.PORT}/bot-manager`);
-    });
+    const serverCallback = () => {
+      console.log(`🚀 Creator11 API running on http://localhost:${config.PORT}`);
+      console.log(`📋 Config endpoint: http://localhost:${config.PORT}/api/config`);
+      console.log(`🩺 Health check: http://localhost:${config.PORT}/health`);
+      console.log(`🤖 Bot Manager endpoint: http://localhost:${config.PORT}/bot-manager`);
+    };
+
+    if (process.env.HOST) {
+      app.listen(config.PORT, process.env.HOST, serverCallback);
+    } else {
+      app.listen(config.PORT, serverCallback);
+    }
   } catch (error) {
     console.error('âŒ Failed to start server:', error);
     process.exit(1);

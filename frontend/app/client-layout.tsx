@@ -1,6 +1,7 @@
 'use client';
 
-import React, { ReactNode, Suspense, lazy, useEffect } from 'react';
+import React, { ReactNode, Suspense, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import Sidebar from './components/layout/Sidebar';
@@ -9,9 +10,11 @@ import TopBar from './components/layout/TopBar';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import StageControls3D from './components/ui/StageControls3D';
 
-const ParticleBackground = lazy(() => import('./components/three/ParticleBackground'));
+const ParticleBackground = dynamic(() => import('./components/three/ParticleBackground'), {
+  ssr: false,
+});
 
-const publicPaths = ['/', '/login', '/signup', '/verify-otp', '/forgot-password'];
+const publicPaths = ['/', '/login', '/signup', '/verify-otp', '/forgot-password', '/tournaments', '/creators'];
 const authOnlyPaths = ['/login', '/signup', '/verify-otp', '/forgot-password'];
 
 function AppShell({ children }: { children: ReactNode }) {

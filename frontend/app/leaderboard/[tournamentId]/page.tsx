@@ -136,7 +136,7 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
     };
 
     fetchLeaderboard();
-    const interval = setInterval(fetchLeaderboard, 5000);
+    const interval = setInterval(fetchLeaderboard, 8000);
     return () => clearInterval(interval);
   }, [token, tournamentId]);
 

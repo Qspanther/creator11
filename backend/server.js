@@ -2,6 +2,8 @@ const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const cors = require('cors');
+const compression = require('compression');
+const { memoryCache } = require('./middleware/cache');
 const config = require('./config');
 const sequelize = require('./db/index');
 require('./db/models'); // Load all models and associations
@@ -55,6 +57,7 @@ app.use('/auth/forgot-password', authLimiter);
 app.use('/auth/reset-password', authLimiter);
 
 // Middleware
+app.use(compression());
 app.use(cors({
   origin: true,
   credentials: true,
@@ -74,12 +77,12 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/auth', require('./routes/auth'));
-app.use('/api/config', require('./routes/config'));
-app.use('/tournaments', require('./routes/tournaments'));
-app.use('/creators', require('./routes/creators'));
+app.use('/api/config', memoryCache(30), require('./routes/config'));
+app.use('/tournaments', memoryCache(5), require('./routes/tournaments'));
+app.use('/creators', memoryCache(15), require('./routes/creators'));
 app.use('/teams', require('./routes/teams'));
 app.use('/wallet', require('./routes/wallet'));
-app.use('/leaderboard', require('./routes/leaderboard'));
+app.use('/leaderboard', memoryCache(3), require('./routes/leaderboard'));
 app.use('/admin', require('./routes/admin'));
 app.use('/notifications', require('./routes/notifications'));
 app.use('/contests', require('./routes/contests'));

@@ -20,7 +20,7 @@ if not os.path.exists(DB_PATH):
         DB_PATH = fallback_path
 
 # ─── Scraping Configuration ───
-POLL_INTERVAL_SECONDS = 10
+POLL_INTERVAL_SECONDS = 45
 CONCURRENT_WORKERS = 5
 VIDEO_CACHE_TTL_MINUTES = 5
 

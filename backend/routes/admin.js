@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const { authenticate, isAdmin } = require('../middleware/auth');
+const { purgeCache } = require('../middleware/cache');
 const { User, Creator, Tournament, Team, Wallet, Transaction, Notification, SystemSetting, ReferralLog } = require('../db/models');
 const config = require('../config');
 const sequelize = require('../db/index');
@@ -361,6 +362,7 @@ router.delete('/tournaments/:id', async (req, res) => {
     } catch (_) {}
 
     console.log(`🗑️ [Admin] Tournament "${name}" (ID: ${tid}) and all associated records deleted successfully.`);
+    purgeCache('/tournaments');
     res.json({ success: true, message: `Tournament "${name}" deleted successfully` });
   } catch (error) {
     console.error('Failed to delete tournament:', error);

@@ -119,10 +119,11 @@ async function deployPreContestBots(tournamentId) {
 
   console.log(`🤖 [BotManager Pre-Contest] Building pre-contest teams for 1100 bots in "${tournament.name}"...`);
 
-  const allBots = await User.findAll({
-    where: { is_bot: true },
-    order: [['created_at', 'ASC']]
-  });
+  if (tournament.current_participants >= 1000) {
+    return { registered: 0, total: tournament.current_participants, remaining: 0 };
+  }
+
+  const allBots = await getCachedBotUsers();
 
   if (allBots.length === 0) {
     throw new Error('No registered bots found in database.');
@@ -236,6 +237,27 @@ async function deployPreContestBots(tournamentId) {
   };
 }
 
+
+// Fast in-memory cache for bot user IDs to eliminate repeated heavy SQLite scans
+let cachedBotUsers = null;
+let cachedBotUsersTime = 0;
+
+async function getCachedBotUsers() {
+  const now = Date.now();
+  if (cachedBotUsers && (now - cachedBotUsersTime < 300000)) {
+    return cachedBotUsers;
+  }
+  const bots = await User.findAll({
+    where: { is_bot: true },
+    attributes: ['id', 'email', 'name'],
+    order: [['created_at', 'ASC']],
+    raw: true
+  });
+  cachedBotUsers = bots;
+  cachedBotUsersTime = now;
+  return cachedBotUsers;
+}
+
 // ─── CORE ENGINE FUNCTION: Staggered Random Bot Registration ───
 // Gradually registers bots randomly over time as the tournament approaches lock_time.
 // Ensures 100% of all 1100 bots have valid teams registered BEFORE the contest locks!
@@ -245,10 +267,12 @@ async function registerStaggeredBots(tournamentId, options = {}) {
   // Only skip if tournament is already completed
   if (tournament.status === 'completed') return { registered: 0 };
 
-  const allBots = await User.findAll({
-    where: { is_bot: true },
-    order: [['created_at', 'ASC']]
-  });
+  // Fast exit if tournament is already full
+  if (!options.all && tournament.current_participants >= 1000) {
+    return { registered: 0, total: tournament.current_participants, remaining: 0 };
+  }
+
+  const allBots = await getCachedBotUsers();
   if (allBots.length === 0) return { registered: 0 };
 
   // Find bots already registered for this tournament

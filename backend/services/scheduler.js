@@ -17,7 +17,7 @@ const { deployPreContestBots, deployAutonomousBots, registerStaggeredBots } = re
 function startScheduler() {
   console.log('⏰ Starting tournament scheduler with 1100-Bot Automation...');
 
-  // Dedicated 10-second ticker: Organic staggered bot registration in real-time
+  // High-performance 20-second ticker: Staggered bot entries without database lock congestion
   let isBotTickActive = false;
   setInterval(async () => {
     if (isBotTickActive) return;
@@ -25,8 +25,10 @@ function startScheduler() {
     try {
       const activeTournaments = await Tournament.findAll({
         where: {
-          status: { [Op.in]: ['upcoming', 'locked', 'live'] },
+          status: { [Op.in]: ['upcoming', 'locked'] },
+          current_participants: { [Op.lt]: 1000 },
         },
+        limit: 4 // Process up to 4 tournaments per tick to keep DB lightning fast
       });
 
       for (const t of activeTournaments) {
@@ -41,7 +43,7 @@ function startScheduler() {
     } finally {
       isBotTickActive = false;
     }
-  }, 10000);
+  }, 20000);
 
   // Run every minute to check tournament state transitions
   cron.schedule('* * * * *', async () => {

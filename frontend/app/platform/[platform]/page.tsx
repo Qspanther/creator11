@@ -85,7 +85,7 @@ export default function PlatformLobbyPage({ params }: { params: Promise<{ platfo
             Temporarily Inactive / Standby
           </div>
           <p className="text-sm text-text-secondary leading-relaxed mb-8">
-            The Instagram battle division has been temporarily frozen by administration. All active fantasy tournaments and creator lineups are running on the YouTube League.
+            The Instagram battle division has been temporarily frozen by administration. All active creator tournaments and creator lineups are running on the YouTube League.
           </p>
           <Link href="/platform/youtube">
             <button className="px-6 py-3.5 rounded-2xl bg-gradient-to-r from-red-600 to-red-500 text-white font-bold text-sm flex items-center justify-center gap-2 mx-auto hover:opacity-95 transition-all cursor-pointer shadow-lg shadow-red-500/20">
@@ -142,7 +142,7 @@ export default function PlatformLobbyPage({ params }: { params: Promise<{ platfo
             <h1 className="text-3xl font-extrabold text-white tracking-tight">{platformName} Battle Lobby</h1>
           </div>
           <p className="text-xs text-text-secondary">
-            Select a Battle League or inspect creator metrics to craft your fantasy dream team
+            Select a Battle League or inspect creator metrics to craft your entertainment dream team
           </p>
         </div>
 

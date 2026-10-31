@@ -33,13 +33,13 @@ export default function LandingPage3D() {
             <span>✨</span> Upgraded 3D Spatial Experience • Creator11
           </div>
           <h1 className="text-4xl sm:text-6xl font-black tracking-tight leading-[1.08]">
-            The Fantasy Sports Arena for{' '}
+            The Creator Entertainment Arena for{' '}
             <span className="bg-gradient-to-r from-purple-400 via-cyan-300 to-amber-300 bg-clip-text text-transparent">
               Digital Creators
             </span>
           </h1>
           <p className="text-slate-300 text-base sm:text-lg max-w-2xl leading-relaxed">
-            Instead of cricket or football athletes, draft your 11-creator fantasy lineup from 50 top YouTube & Instagram stars inside an interactive 3D stadium. Earn real-time points from Views, Likes, Engagement Velocity, and 2.0x Captain multipliers.
+            Instead of cricket or football athletes, draft your 11-creator entertainment lineup from 50 top YouTube & Instagram stars inside an interactive 3D stadium. Earn real-time points from Views, Likes, Engagement Velocity, and 2.0x Captain multipliers.
           </p>
           <div className="flex flex-wrap gap-3.5 pt-2">
             <Link
@@ -122,7 +122,7 @@ export default function LandingPage3D() {
                   <div className="text-sm font-black text-cyan-300">+1,42,800</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/45 border border-white/10">
-                  <div className="text-[11px] text-slate-400">2x Fantasy Pts</div>
+                  <div className="text-[11px] text-slate-400">2x Multiplier Pts</div>
                   <div className="text-sm font-black text-amber-300">964.5 pts</div>
                 </div>
               </div>
@@ -161,7 +161,7 @@ export default function LandingPage3D() {
             <div className="text-2xl mb-2">❤️</div>
             <div className="text-xs font-bold uppercase text-fuchsia-300">Likes & Reactions</div>
             <div className="text-xl font-black text-white mt-1">+2 Pts / 100 Likes</div>
-            <p className="text-xs text-slate-400 mt-1">High-engagement viral posts trigger rapid fantasy point bursts.</p>
+            <p className="text-xs text-slate-400 mt-1">High-engagement viral posts trigger rapid creator point bursts.</p>
           </TiltCard3D>
           <TiltCard3D className="p-5">
             <div className="text-2xl mb-2">👑</div>

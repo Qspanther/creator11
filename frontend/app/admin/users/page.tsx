@@ -208,7 +208,7 @@ export default function AdminUsersPage() {
 
                       {/* Teams */}
                       <div>
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Trophy size={18} className="text-neon-purple"/> Fantasy Teams</h3>
+                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Trophy size={18} className="text-neon-purple"/> Creator Teams</h3>
                         <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
                           {profileData.teams && profileData.teams.length > 0 ? (
                             <div className="max-h-[300px] overflow-y-auto">

@@ -56,7 +56,7 @@ export default function SignupPage() {
 
         <div className="glass p-8 glow-purple">
           <h2 className="text-2xl font-bold mb-2">Create Account</h2>
-          <p className="text-sm text-text-secondary mb-6">Join the fantasy creator league</p>
+          <p className="text-sm text-text-secondary mb-6">Join the creator entertainment league</p>
 
           {error && (
             <div className="mb-4 p-3 rounded-xl bg-danger/10 border border-danger/20 text-sm text-danger">

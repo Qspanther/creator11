@@ -908,7 +908,7 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
                           setHasActivePass(true);
                         }
                       } catch (e) {}
-                      const msg = `🔥 Join Creator11 (Creator Fantasy League)! Use my promo code: *${userShareData.code}*\n\nSign up: ${userShareData.shareUrl}`;
+                      const msg = `🔥 Join Creator11 (Creator Entertainment League)! Use my promo code: *${userShareData.code}*\n\nSign up: ${userShareData.shareUrl}`;
                       window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
                     }}
                     className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20"

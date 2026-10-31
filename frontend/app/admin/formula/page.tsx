@@ -59,7 +59,7 @@ export default function PointsFormulaPage() {
       <div>
         <h1 className="text-3xl font-extrabold text-white flex items-center gap-3">
           <Sliders size={32} className="text-neon-cyan" />
-          Fantasy Points Formula Engine
+          Points Formula Engine
         </h1>
         <p className="text-sm text-text-secondary mt-1">
           Adjust live mathematical weights and multipliers that calculate player tournament scores
@@ -88,7 +88,7 @@ export default function PointsFormulaPage() {
                   className="w-full !font-mono !py-3"
                 />
                 <p className="text-[11px] text-text-muted mt-1">
-                  e.g. 0.0001 means 10,000 views = 1.0 fantasy point.
+                  e.g. 0.0001 means 10,000 views = 1.0 score point.
                 </p>
               </div>
 

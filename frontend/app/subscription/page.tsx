@@ -125,7 +125,7 @@ export default function SubscriptionHubPage() {
   const handleShareWhatsApp = () => {
     if (!data?.share?.code || !data?.share?.shareUrl) return;
     handleRecordShare('whatsapp');
-    const text = `🔥 Join me on Creator11! Build your 11-creator fantasy squad with 100% Never-Lose Guarantee.
+    const text = `🔥 Join me on Creator11! Build your 11-creator entertainment squad with 100% Never-Lose Guarantee.
 
 Use my promo code: *${data.share.code}*
 
@@ -136,7 +136,7 @@ Sign up here: ${data.share.shareUrl}`;
   const handleShareTelegram = () => {
     if (!data?.share?.code || !data?.share?.shareUrl) return;
     handleRecordShare('telegram');
-    const text = `🔥 Join me on Creator11! Build your 11-creator fantasy squad with 100% Never-Lose Guarantee.\n\nCode: ${data.share.code}`;
+    const text = `🔥 Join me on Creator11! Build your 11-creator entertainment squad with 100% Never-Lose Guarantee.\n\nCode: ${data.share.code}`;
     window.open(`https://t.me/share/url?url=${encodeURIComponent(data.share.shareUrl)}&text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -252,7 +252,7 @@ Sign up here: ${data.share.shareUrl}`;
             <p className="text-xs md:text-sm text-text-secondary max-w-2xl leading-relaxed">
               {access?.hasAccess
                 ? 'Your account is authorized to build and enter 11-creator squads into any live or upcoming tournament.'
-                : `To enter fantasy matches, you can either buy a VIP Monthly Pass for ₹${sub?.monthlyPrice || 199}, OR invite/share with ${targetShares} friends to unlock completely FREE.`}
+                : `To enter creator matches, you can either buy a VIP Monthly Pass for ₹${sub?.monthlyPrice || 199}, OR invite/share with ${targetShares} friends to unlock completely FREE.`}
             </p>
           </div>
 

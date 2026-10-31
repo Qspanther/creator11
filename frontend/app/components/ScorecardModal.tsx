@@ -164,14 +164,14 @@ export default function ScorecardModal({ teamId, isOpen, onClose, team }: Scorec
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-bold">
-                  3D LIVE FANTASY SCORECARD
+                  3D LIVE ENTERTAINMENT SCORECARD
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
                   REAL-TIME DELTAS
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white">
-                {data?.userName || team?.name || '3D Fantasy Squad'}
+                {data?.userName || team?.name || '3D Creator Squad'}
               </h2>
             </div>
           </div>

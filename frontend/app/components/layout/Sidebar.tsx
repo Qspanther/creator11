@@ -86,7 +86,7 @@ export default function Sidebar() {
               CREATOR11
             </div>
             <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-400">
-              3D Cyber Fantasy
+              3D Cyber Entertainment
             </div>
           </div>
         </Link>

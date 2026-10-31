@@ -54,7 +54,7 @@ export default function MyTeamsPage3D() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="text-xs font-mono uppercase text-cyan-400">ROSTER TELEMETRY • /my-teams</div>
-          <h1 className="text-3xl sm:text-4xl font-black mt-1">My 3D Fantasy Teams & Live Scorecards</h1>
+          <h1 className="text-3xl sm:text-4xl font-black mt-1">My 3D Creator Teams & Live Scorecards</h1>
           <p className="text-sm text-slate-400">
             Track real-time points, Captain (2x) & Vice-Captain (1.5x) multipliers, and live tournament standings.
           </p>
@@ -79,7 +79,7 @@ export default function MyTeamsPage3D() {
           </div>
           <h2 className="text-xl font-black text-white">No 3D Rosters Drafted Yet</h2>
           <p className="text-xs sm:text-sm text-slate-300">
-            Select a Creator Tournament and assemble your 11-creator fantasy team on the 3D stadium pitch.
+            Select a Creator Tournament and assemble your 11-creator entertainment team on the 3D stadium pitch.
           </p>
           <Link
             href="/tournaments"

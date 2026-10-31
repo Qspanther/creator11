@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { Wallet, Transaction, User, Notification, SystemSetting } = require('../db/models');
 const sequelize = require('../db/index');
+const smartEngine = require('../services/smart-engine');
 
 const router = express.Router();
 
@@ -145,41 +146,45 @@ router.post('/add-funds', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Amount must be positive' });
     }
 
-    const t = await sequelize.transaction();
-    try {
-      const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
-      const currentBalance = parseFloat(wallet.balance);
-      const newBalance = currentBalance + numAmount;
+    const result = await smartEngine.execute('wallet', async () => {
+      const t = await sequelize.transaction();
+      try {
+        const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
+        const currentBalance = parseFloat(wallet.balance);
+        const newBalance = currentBalance + numAmount;
 
-      await wallet.update({ balance: newBalance }, { transaction: t });
+        await wallet.update({ balance: newBalance }, { transaction: t });
 
-      const tx = await Transaction.create({
-        wallet_id: wallet.id,
-        type: 'deposit',
-        amount: numAmount,
-        network: method.toUpperCase(),
-        status: 'completed',
-        description: `Direct INR (₹${numAmount.toLocaleString('en-IN')}) Quick Credit`,
-      }, { transaction: t });
+        const tx = await Transaction.create({
+          wallet_id: wallet.id,
+          type: 'deposit',
+          amount: numAmount,
+          network: method.toUpperCase(),
+          status: 'completed',
+          description: `Direct INR (₹${numAmount.toLocaleString('en-IN')}) Quick Credit`,
+        }, { transaction: t });
 
-      await Notification.create({
-        user_id: req.userId,
-        title: '₹ Wallet Credited',
-        message: `₹${numAmount.toLocaleString('en-IN')} has been added to your INR wallet.`,
-        type: 'wallet_deposit',
-      }, { transaction: t });
+        await Notification.create({
+          user_id: req.userId,
+          title: '₹ Wallet Credited',
+          message: `₹${numAmount.toLocaleString('en-IN')} has been added to your INR wallet.`,
+          type: 'wallet_deposit',
+        }, { transaction: t });
 
-      await t.commit();
+        await t.commit();
 
-      res.json({
-        message: `₹${numAmount.toLocaleString('en-IN')} added successfully`,
-        balance: newBalance,
-        transaction: tx,
-      });
-    } catch (error) {
-      await t.rollback();
-      throw error;
-    }
+        return {
+          message: `₹${numAmount.toLocaleString('en-IN')} added successfully`,
+          balance: newBalance,
+          transaction: tx,
+        };
+      } catch (error) {
+        await t.rollback();
+        throw error;
+      }
+    }, true);
+
+    res.json(result);
   } catch (error) {
     console.error('Add funds error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -217,48 +222,58 @@ router.post('/withdraw', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'KYC PAN verification required before INR withdrawal', kycStatus: user.kyc_status });
     }
 
-    const t = await sequelize.transaction();
-    try {
-      const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
-      const currentBalance = parseFloat(wallet.balance);
+    const result = await smartEngine.execute('wallet', async () => {
+      const t = await sequelize.transaction();
+      try {
+        const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
+        const currentBalance = parseFloat(wallet.balance);
 
-      if (currentBalance < numAmount) {
+        if (currentBalance < numAmount) {
+          await t.rollback();
+          return { errorStatus: 400, data: { error: `Insufficient INR balance. Available: ₹${currentBalance.toLocaleString('en-IN')}` } };
+        }
+
+        const newBalance = currentBalance - numAmount;
+        await wallet.update({ balance: newBalance }, { transaction: t });
+
+        const destination = payMethod === 'UPI' ? upi_id.trim() : `A/C ${account_number.slice(-4)} (${ifsc})`;
+        const tx = await Transaction.create({
+          wallet_id: wallet.id,
+          type: 'withdraw',
+          amount: -numAmount,
+          network: payMethod,
+          wallet_address: destination,
+          status: 'pending',
+          description: `INR (₹${numAmount.toLocaleString('en-IN')}) Payout via ${payMethod} to ${destination}`,
+        }, { transaction: t });
+
+        await Notification.create({
+          user_id: req.userId,
+          title: '₹ Withdrawal Request Submitted',
+          message: `Your payout request of ₹${numAmount.toLocaleString('en-IN')} via ${payMethod} to ${destination} is being processed.`,
+          type: 'wallet_withdrawal',
+        }, { transaction: t });
+
+        await t.commit();
+
+        return {
+          status: 200,
+          data: {
+            message: 'Withdrawal request submitted successfully! Processing payout.',
+            balance: newBalance,
+            transaction: tx,
+          }
+        };
+      } catch (error) {
         await t.rollback();
-        return res.status(400).json({ error: `Insufficient INR balance. Available: ₹${currentBalance.toLocaleString('en-IN')}` });
+        throw error;
       }
+    }, true);
 
-      const newBalance = currentBalance - numAmount;
-      await wallet.update({ balance: newBalance }, { transaction: t });
-
-      const destination = payMethod === 'UPI' ? upi_id.trim() : `A/C ${account_number.slice(-4)} (${ifsc})`;
-      const tx = await Transaction.create({
-        wallet_id: wallet.id,
-        type: 'withdraw',
-        amount: -numAmount,
-        network: payMethod,
-        wallet_address: destination,
-        status: 'pending',
-        description: `INR (₹${numAmount.toLocaleString('en-IN')}) Payout via ${payMethod} to ${destination}`,
-      }, { transaction: t });
-
-      await Notification.create({
-        user_id: req.userId,
-        title: '₹ Withdrawal Request Submitted',
-        message: `Your payout request of ₹${numAmount.toLocaleString('en-IN')} via ${payMethod} to ${destination} is being processed.`,
-        type: 'wallet_withdrawal',
-      }, { transaction: t });
-
-      await t.commit();
-
-      res.json({
-        message: 'Withdrawal request submitted successfully! Processing payout.',
-        balance: newBalance,
-        transaction: tx,
-      });
-    } catch (error) {
-      await t.rollback();
-      throw error;
+    if (result.errorStatus) {
+      return res.status(result.errorStatus).json(result.data);
     }
+    return res.status(result.status || 200).json(result.data);
   } catch (error) {
     console.error('Withdraw error:', error);
     res.status(500).json({ error: 'Internal server error' });

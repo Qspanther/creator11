@@ -65,3 +65,4 @@ function purgeCache(prefix = '') {
 }
 
 module.exports = { memoryCache, purgeCache };
+

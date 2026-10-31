@@ -17,6 +17,7 @@ const {
 const { calculateScores } = require('../services/scoring-engine');
 const { distributePrizes } = require('../services/prize-distribution');
 const sequelize = require('../db/index');
+const smartEngine = require('../services/smart-engine');
 const { Op } = require('sequelize');
 
 const router = express.Router();
@@ -216,14 +217,16 @@ async function deployPreContestBots(tournamentId) {
     });
   }
 
-  // Bulk insert in chunks
+  // Bulk insert in chunks via SmartEngine background lane
   const CHUNK = 300;
-  for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
-    await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
-  }
-  for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
-    await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
-  }
+  await smartEngine.execute('bot', async () => {
+    for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
+      await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
+    }
+    for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
+      await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
+    }
+  }, false);
 
   await tournament.update({
     current_participants: newTeamRecords.length
@@ -397,12 +400,14 @@ async function registerStaggeredBots(tournamentId, options = {}) {
   }
 
   const CHUNK = 300;
-  for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
-    await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
-  }
-  for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
-    await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
-  }
+  await smartEngine.execute('bot', async () => {
+    for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
+      await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
+    }
+    for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
+      await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
+    }
+  }, false);
 
   const totalNow = await Team.count({ where: { tournament_id: tournamentId } });
   await tournament.update({ current_participants: totalNow });
@@ -704,14 +709,16 @@ async function deployAutonomousBots(tournamentId) {
     });
   });
 
-  // Bulk save in chunks
+  // Bulk save in chunks via SmartEngine background lane
   const CHUNK = 300;
-  for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
-    await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
-  }
-  for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
-    await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
-  }
+  await smartEngine.execute('bot', async () => {
+    for (let i = 0; i < newTeamRecords.length; i += CHUNK) {
+      await Team.bulkCreate(newTeamRecords.slice(i, i + CHUNK));
+    }
+    for (let i = 0; i < newTeamCreatorRecords.length; i += CHUNK) {
+      await TeamCreator.bulkCreate(newTeamCreatorRecords.slice(i, i + CHUNK));
+    }
+  }, false);
 
   await tournament.update({
     current_participants: newTeamRecords.length

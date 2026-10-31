@@ -74,9 +74,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    try {
+      localStorage.removeItem('creator11_token');
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.clear();
+      }
+    } catch (_) {}
     setToken(null);
     setUser(null);
-    localStorage.removeItem('creator11_token');
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
   };
 
   return (

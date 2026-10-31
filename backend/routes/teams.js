@@ -5,6 +5,7 @@ const config = require('../config');
 const { Team, TeamCreator, Creator, Tournament, Wallet, Transaction, User, SystemSetting } = require('../db/models');
 const sequelize = require('../db/index');
 const { getTeamScorecard } = require('../services/scoring-engine');
+const smartEngine = require('../services/smart-engine');
 
 const router = express.Router();
 
@@ -186,83 +187,96 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Team validation failed', details: validation.errors });
     }
 
-    // Check wallet balance and deduct entry fee
-    const t = await sequelize.transaction();
-    try {
-      const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
-      if (!wallet) {
+    // Smart Parallel DB Dispatch: Dedicated user_team lane with lock preemption & auto retry
+    const teamResult = await smartEngine.execute('team', async () => {
+      const t = await sequelize.transaction();
+      try {
+        const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
+        if (!wallet) {
+          await t.rollback();
+          return { errorStatus: 400, data: { error: 'Wallet not found' } };
+        }
+
+        const balance = parseFloat(wallet.balance) || 0;
+        const tournamentFee = parseFloat(tournament.entry_fee);
+        const entryFee = (!isNaN(tournamentFee) && tournamentFee >= 0) ? tournamentFee : 99.00;
+
+        if (entryFee > 0 && balance < entryFee) {
+          await t.rollback();
+          return {
+            errorStatus: 400,
+            data: {
+              error: `Insufficient wallet balance. ₹${entryFee.toFixed(2)} is required to lock and enter this contest, but your wallet balance is ₹${balance.toFixed(2)}.`,
+              requiresDeposit: true,
+              requiredAmount: entryFee,
+              currentBalance: balance,
+              redirectTo: `/wallet?required=${Math.ceil(entryFee)}`
+            }
+          };
+        }
+
+        // Deduct entry fee from user wallet balance
+        if (entryFee > 0) {
+          const newBalance = Math.max(0, balance - entryFee);
+          await wallet.update({ balance: newBalance }, { transaction: t });
+        }
+
+        // Create entry fee transaction
+        await Transaction.create({
+          wallet_id: wallet.id,
+          type: 'entry_fee',
+          amount: -entryFee,
+          status: 'completed',
+          reference_tournament_id: tournamentId,
+          description: `Contest Entry Fee (₹${entryFee.toLocaleString('en-IN')}) for "${tournament.name}"`,
+        }, { transaction: t });
+
+        // Create team
+        const team = await Team.create({
+          user_id: req.userId,
+          tournament_id: tournamentId,
+          captain_creator_id: captainId,
+          vice_captain_creator_id: viceCaptainId,
+          is_locked: false,
+          total_credits_used: validation.totalCredits,
+        }, { transaction: t });
+
+        // Create team-creator associations
+        const teamCreators = creatorIds.map(cid => ({
+          team_id: team.id,
+          creator_id: cid,
+        }));
+        await TeamCreator.bulkCreate(teamCreators, { transaction: t });
+
+        // Increment tournament participant count
+        await tournament.increment('current_participants', { transaction: t });
+
+        await t.commit();
+
+        return {
+          status: 201,
+          data: {
+            message: 'Team created successfully',
+            team: {
+              id: team.id,
+              tournamentId: team.tournament_id,
+              captainId: team.captain_creator_id,
+              viceCaptainId: team.vice_captain_creator_id,
+              creditsUsed: validation.totalCredits,
+              creatorCount: creatorIds.length,
+            },
+          }
+        };
+      } catch (error) {
         await t.rollback();
-        return res.status(400).json({ error: 'Wallet not found' });
+        throw error;
       }
+    }, true);
 
-      const balance = parseFloat(wallet.balance) || 0;
-      const tournamentFee = parseFloat(tournament.entry_fee);
-      const entryFee = (!isNaN(tournamentFee) && tournamentFee >= 0) ? tournamentFee : 99.00;
-
-      if (entryFee > 0 && balance < entryFee) {
-        await t.rollback();
-        return res.status(400).json({
-          error: `Insufficient wallet balance. ₹${entryFee.toFixed(2)} is required to lock and enter this contest, but your wallet balance is ₹${balance.toFixed(2)}.`,
-          requiresDeposit: true,
-          requiredAmount: entryFee,
-          currentBalance: balance,
-          redirectTo: `/wallet?required=${Math.ceil(entryFee)}`
-        });
-      };
-
-      // Deduct entry fee from user wallet balance
-      if (entryFee > 0) {
-        const newBalance = Math.max(0, balance - entryFee);
-        await wallet.update({ balance: newBalance }, { transaction: t });
-      }
-
-      // Create entry fee transaction
-      await Transaction.create({
-        wallet_id: wallet.id,
-        type: 'entry_fee',
-        amount: -entryFee,
-        status: 'completed',
-        reference_tournament_id: tournamentId,
-        description: `Contest Entry Fee (₹${entryFee.toLocaleString('en-IN')}) for "${tournament.name}"`,
-      }, { transaction: t });
-
-      // Create team
-      const team = await Team.create({
-        user_id: req.userId,
-        tournament_id: tournamentId,
-        captain_creator_id: captainId,
-        vice_captain_creator_id: viceCaptainId,
-        is_locked: false,
-        total_credits_used: validation.totalCredits,
-      }, { transaction: t });
-
-      // Create team-creator associations
-      const teamCreators = creatorIds.map(cid => ({
-        team_id: team.id,
-        creator_id: cid,
-      }));
-      await TeamCreator.bulkCreate(teamCreators, { transaction: t });
-
-      // Increment tournament participant count
-      await tournament.increment('current_participants', { transaction: t });
-
-      await t.commit();
-
-      res.status(201).json({
-        message: 'Team created successfully',
-        team: {
-          id: team.id,
-          tournamentId: team.tournament_id,
-          captainId: team.captain_creator_id,
-          viceCaptainId: team.vice_captain_creator_id,
-          creditsUsed: validation.totalCredits,
-          creatorCount: creatorIds.length,
-        },
-      });
-    } catch (error) {
-      await t.rollback();
-      throw error;
+    if (teamResult.errorStatus) {
+      return res.status(teamResult.errorStatus).json(teamResult.data);
     }
+    return res.status(teamResult.status || 201).json(teamResult.data);
   } catch (error) {
     console.error('Create team error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -301,41 +315,45 @@ router.put('/:id', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Team validation failed', details: validation.errors });
     }
 
-    // Update team
-    const t = await sequelize.transaction();
-    try {
-      // Remove old team-creator associations
-      await TeamCreator.destroy({ where: { team_id: team.id }, transaction: t });
+    // Smart Parallel DB Dispatch: Update team in user_team priority lane
+    const editResult = await smartEngine.execute('team', async () => {
+      const t = await sequelize.transaction();
+      try {
+        // Remove old team-creator associations
+        await TeamCreator.destroy({ where: { team_id: team.id }, transaction: t });
 
-      // Create new associations
-      const teamCreators = creatorIds.map(cid => ({
-        team_id: team.id,
-        creator_id: cid,
-      }));
-      await TeamCreator.bulkCreate(teamCreators, { transaction: t });
+        // Create new associations
+        const teamCreators = creatorIds.map(cid => ({
+          team_id: team.id,
+          creator_id: cid,
+        }));
+        await TeamCreator.bulkCreate(teamCreators, { transaction: t });
 
-      // Update captain/vc
-      await team.update({
-        captain_creator_id: captainId,
-        vice_captain_creator_id: viceCaptainId,
-        total_credits_used: validation.totalCredits,
-      }, { transaction: t });
+        // Update captain/vc
+        await team.update({
+          captain_creator_id: captainId,
+          vice_captain_creator_id: viceCaptainId,
+          total_credits_used: validation.totalCredits,
+        }, { transaction: t });
 
-      await t.commit();
+        await t.commit();
 
-      res.json({
-        message: 'Team updated successfully',
-        team: {
-          id: team.id,
-          captainId,
-          viceCaptainId,
-          creditsUsed: validation.totalCredits,
-        },
-      });
-    } catch (error) {
-      await t.rollback();
-      throw error;
-    }
+        return {
+          message: 'Team updated successfully',
+          team: {
+            id: team.id,
+            captainId,
+            viceCaptainId,
+            creditsUsed: validation.totalCredits,
+          },
+        };
+      } catch (error) {
+        await t.rollback();
+        throw error;
+      }
+    }, true);
+
+    return res.json(editResult);
   } catch (error) {
     console.error('Edit team error:', error);
     res.status(500).json({ error: 'Internal server error' });

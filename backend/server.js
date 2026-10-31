@@ -124,6 +124,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Smart DB Concurrency Engine status
+const smartEngine = require('./services/smart-engine');
+app.get('/api/smart-engine/status', (req, res) => {
+  res.json({ success: true, ...smartEngine.getStatus() });
+});
+
 // YouTube Live Tracker status & manual sync endpoints
 const { startYouTubeTracker, syncNow, getStatus } = require('./services/youtubeSyncService');
 

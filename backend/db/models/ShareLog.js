@@ -30,3 +30,4 @@ const ShareLog = sequelize.define('ShareLog', {
 });
 
 module.exports = ShareLog;
+

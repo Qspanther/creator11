@@ -7,21 +7,23 @@ const { createClient } = require('@libsql/client');
 const fs = require('fs');
 const path = require('path');
 
+const DEFAULT_TURSO_URL = 'libsql://creator11-db-qspanther.aws-ap-south-1.turso.io';
+const DEFAULT_TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTM1NDI0ODAsImlkIjoiMDFhMTk3NzQtYzMwMS03YWQ5LTg1MTgtMTI0Y2UxYzkxNjQwIiwia2lkIjoiM0ZnTmVpWFdZRjRMTE54TUFZV0NBSEVHTjMyQlpOamhYZ2xlVGdmUy14TSIsInJpZCI6IjgwMjc3OWY3LTU4ZGYtNGI2MS1hNzc3LWJlMTAwYThhMTA0YiJ9.Dk06EQOzT_fMJ6A57OEVEEEkYtSKg0qAOZcM7bAc8CjbiK2MzDydMTygDV8YxjYsKNiMBdmC4PMIQmjZMj2dCw';
+
 let tursoClient = null;
 
 function isTursoConfigured() {
-  return Boolean(
-    process.env.TURSO_DATABASE_URL &&
-    (process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN)
-  );
+  const url = process.env.TURSO_DATABASE_URL || DEFAULT_TURSO_URL;
+  const token = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || DEFAULT_TURSO_TOKEN;
+  return Boolean(url && token);
 }
 
 function getTursoClient() {
   if (tursoClient) return tursoClient;
   if (!isTursoConfigured()) return null;
 
-  const url = process.env.TURSO_DATABASE_URL;
-  const authToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN;
+  const url = process.env.TURSO_DATABASE_URL || DEFAULT_TURSO_URL;
+  const authToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || DEFAULT_TURSO_TOKEN;
 
   tursoClient = createClient({
     url,

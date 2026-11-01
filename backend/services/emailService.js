@@ -2,7 +2,8 @@
 // Multi-Channel Email Service for Local & Cloud (Render) Deployment:
 // 1. Resend HTTPS API (Port 443 — Open on Render) via RESEND_API_KEY
 // 2. Google Apps Script Webhook (Port 443 — Open on Render) via GMAIL_WEBHOOK_URL
-// 3. Direct Gmail SMTP (Port 465 / 587) for local testing & hosts with open SMTP
+// 3. Brevo HTTPS API (Port 443 — Open on Render) via BREVO_API_KEY
+// 4. Direct Gmail SMTP (Port 465 / 587) for local testing & hosts with open SMTP
 
 require('dotenv').config();
 const nodemailer = require('nodemailer');
@@ -11,16 +12,25 @@ const mailUser = (process.env.MAIL_USER || 'qspanther@gmail.com').replace(/\s+/g
 const rawPass = process.env.MAIL_PASS || Buffer.from('dHBvbWxmeG1nYnl0Zm9rbw==', 'base64').toString('ascii');
 const mailPass = rawPass.replace(/\s+/g, '').trim();
 
-// ─── SMTP Transporters (with 4000ms fast timeout to avoid Render 90s freeze) ──
+function withTimeout(promise, ms, desc) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout (${ms}ms) while ${desc}`)), ms)
+    ),
+  ]);
+}
+
+// ─── SMTP Transporters (with fast 3000ms timeout to avoid Render freeze) ────
 const gmailTransporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: mailUser,
     pass: mailPass,
   },
-  connectionTimeout: 4000,
-  greetingTimeout: 4000,
-  socketTimeout: 5000,
+  connectionTimeout: 3000,
+  greetingTimeout: 3000,
+  socketTimeout: 4000,
   tls: {
     rejectUnauthorized: false,
   },
@@ -35,9 +45,9 @@ const smtp587Transporter = nodemailer.createTransport({
     user: mailUser,
     pass: mailPass,
   },
-  connectionTimeout: 4000,
-  greetingTimeout: 4000,
-  socketTimeout: 5000,
+  connectionTimeout: 3000,
+  greetingTimeout: 3000,
+  socketTimeout: 4000,
   tls: {
     rejectUnauthorized: false,
   },
@@ -58,20 +68,24 @@ async function tryResend({ toEmail, subject, text, html }) {
   if (!apiKey) return null;
 
   try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: process.env.RESEND_FROM || 'Creator11 <onboarding@resend.dev>',
-        to: [toEmail],
-        subject,
-        text,
-        html,
+    const res = await withTimeout(
+      fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: process.env.RESEND_FROM || 'Creator11 <onboarding@resend.dev>',
+          to: [toEmail],
+          subject,
+          text,
+          html,
+        }),
       }),
-    });
+      4000,
+      'calling Resend API'
+    );
     const data = await res.json();
     if (res.ok) {
       console.log(`✅ [EmailService:Resend-HTTPS] Email delivered to ${toEmail} (ID: ${data.id})`);
@@ -91,18 +105,59 @@ async function tryGoogleScript({ toEmail, subject, text, html }) {
   if (!webhookUrl) return null;
 
   try {
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: toEmail, subject, text, html }),
-      redirect: 'follow',
-    });
+    const res = await withTimeout(
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: toEmail, subject, text, html }),
+        redirect: 'follow',
+      }),
+      5000,
+      'calling Google Apps Script webhook'
+    );
     if (res.ok) {
       console.log(`✅ [EmailService:GoogleScript-HTTPS] Email delivered to ${toEmail}`);
       return { success: true, provider: 'google-script-https' };
     }
   } catch (e) {
     console.warn('⚠️ [EmailService:GoogleScript-HTTPS] Error:', e.message);
+  }
+  return null;
+}
+
+// ─── Channel 3: Brevo HTTPS API (Port 443 — Works 100% on Render) ──────────
+async function tryBrevo({ toEmail, subject, text, html }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const res = await withTimeout(
+      fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: 'Creator11', email: mailUser },
+          to: [{ email: toEmail }],
+          subject,
+          htmlContent: html,
+          textContent: text,
+        }),
+      }),
+      4000,
+      'calling Brevo API'
+    );
+    const data = await res.json();
+    if (res.ok) {
+      console.log(`✅ [EmailService:Brevo-HTTPS] Email delivered to ${toEmail} (ID: ${data.messageId})`);
+      return { success: true, messageId: data.messageId, provider: 'brevo-https' };
+    } else {
+      console.warn('⚠️ [EmailService:Brevo-HTTPS] Notice:', data.message || res.statusText);
+    }
+  } catch (e) {
+    console.warn('⚠️ [EmailService:Brevo-HTTPS] Error:', e.message);
   }
   return null;
 }
@@ -187,6 +242,10 @@ async function executeSendMail({ toEmail, name, otp, purpose, expiryMinutes = 10
   const scriptRes = await tryGoogleScript({ toEmail, subject, text: plainText, html });
   if (scriptRes?.success) return scriptRes;
 
+  // 3. Try Brevo HTTPS API (Port 443 — Works on Render)
+  const brevoRes = await tryBrevo({ toEmail, subject, text: plainText, html });
+  if (brevoRes?.success) return brevoRes;
+
   const mailOptions = {
     from: `"Creator11" <${mailUser}>`,
     replyTo: mailUser,
@@ -196,17 +255,25 @@ async function executeSendMail({ toEmail, name, otp, purpose, expiryMinutes = 10
     html,
   };
 
-  // 3. Try Primary 'service: gmail' (Nodemailer native preset)
+  // 4. Try Primary 'service: gmail' (Nodemailer native preset, 3500ms max)
   try {
-    const info = await gmailTransporter.sendMail(mailOptions);
+    const info = await withTimeout(
+      gmailTransporter.sendMail(mailOptions),
+      3500,
+      'connecting to Gmail SMTP (Port 465)'
+    );
     console.log(`✅ [EmailService:Gmail] Email delivered to ${toEmail} (msgId: ${info.messageId})`);
     return { success: true, messageId: info.messageId, provider: 'service-gmail' };
   } catch (gmailErr) {
     console.warn(`⚠️ [EmailService:Gmail] Notice: ${gmailErr.message}. Trying port 587 fallback...`);
-    
-    // 4. Try Fallback Port 587 STARTTLS
+
+    // 5. Try Fallback Port 587 STARTTLS (3500ms max)
     try {
-      const info = await smtp587Transporter.sendMail(mailOptions);
+      const info = await withTimeout(
+        smtp587Transporter.sendMail(mailOptions),
+        3500,
+        'connecting to Gmail SMTP (Port 587)'
+      );
       console.log(`✅ [EmailService:SMTP-587] Email delivered to ${toEmail} (msgId: ${info.messageId})`);
       return { success: true, messageId: info.messageId, provider: 'smtp-587' };
     } catch (smtpErr) {

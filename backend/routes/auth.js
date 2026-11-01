@@ -1,4 +1,5 @@
 const express = require('express');
+const net = require('net');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('../config');
@@ -525,6 +526,83 @@ router.put('/change-email', authenticate, async (req, res) => {
     res.json({ message: 'Email changed successfully' });
   } catch (error) {
     res.status(401).json({ error: 'Unauthorized or error changing email' });
+  }
+});
+
+function probePort(host, port, timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let isResolved = false;
+
+    socket.setTimeout(timeoutMs);
+
+    socket.on('connect', () => {
+      if (!isResolved) {
+        isResolved = true;
+        socket.destroy();
+        resolve({ port, status: 'OPEN', message: `Connected to ${host}:${port}` });
+      }
+    });
+
+    socket.on('timeout', () => {
+      if (!isResolved) {
+        isResolved = true;
+        socket.destroy();
+        resolve({ port, status: 'BLOCKED', message: `Timed out (${timeoutMs}ms) — host firewall blocked outbound packets` });
+      }
+    });
+
+    socket.on('error', (err) => {
+      if (!isResolved) {
+        isResolved = true;
+        socket.destroy();
+        resolve({ port, status: 'ERROR', message: err.message });
+      }
+    });
+
+    try {
+      socket.connect(port, host);
+    } catch (e) {
+      if (!isResolved) {
+        isResolved = true;
+        resolve({ port, status: 'EXCEPTION', message: e.message });
+      }
+    }
+  });
+}
+
+// GET /auth/diagnostic — Instant server-side diagnostic to check Render egress network & env status
+router.get('/diagnostic', async (req, res) => {
+  try {
+    const [probe465, probe587] = await Promise.all([
+      probePort('smtp.gmail.com', 465, 1500),
+      probePort('smtp.gmail.com', 587, 1500),
+    ]);
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      hostInfo: {
+        nodeEnv: process.env.NODE_ENV || 'production',
+        platform: process.platform,
+        isRender: Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID),
+      },
+      egressPortStatus: {
+        gmailSmtp465: probe465,
+        gmailSmtp587: probe587,
+      },
+      servicesConfigured: {
+        mailUser: process.env.MAIL_USER || 'qspanther@gmail.com',
+        resendApiKey: Boolean(process.env.RESEND_API_KEY),
+        brevoApiKey: Boolean(process.env.BREVO_API_KEY),
+        gmailWebhookUrl: Boolean(process.env.GMAIL_WEBHOOK_URL),
+        tursoConfigured: true,
+      },
+      verdict: (probe465.status === 'OPEN' || probe587.status === 'OPEN')
+        ? 'Direct SMTP is open on this server!'
+        : 'Direct SMTP (ports 465 & 587) is blocked by Render firewall. HTTPS Port 443 API (Resend / Brevo / Google Apps Script) required for email delivery.',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

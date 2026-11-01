@@ -149,3 +149,4 @@ class SmartParallelEngine extends EventEmitter {
 // Export singleton instance
 const smartEngine = new SmartParallelEngine();
 module.exports = smartEngine;
+

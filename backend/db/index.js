@@ -32,6 +32,7 @@ sequelize.authenticate().then(async () => {
     await sequelize.query('PRAGMA cache_size = -64000;'); // 64MB memory page cache
     await sequelize.query('PRAGMA temp_store = MEMORY;');
     await sequelize.query('PRAGMA mmap_size = 268435456;'); // 256MB memory-mapped I/O
+    await sequelize.query('PRAGMA wal_autocheckpoint = 1000;'); // Auto-checkpoint every 1000 pages (~4MB)
 
     // Essential high-speed compound and foreign key indexes
     await sequelize.query('CREATE INDEX IF NOT EXISTS idx_team_creators_team_id ON team_creators(team_id);');

@@ -33,6 +33,7 @@ const formatIndianCount = (val: number | string | undefined) => {
 export default function CreatorsVaultPage3D() {
   const { token } = useAuth();
   const [creators, setCreators] = useState<Creator[]>([]);
+  const [platform, setPlatform] = useState<string>('all');
   const [category, setCategory] = useState<string>('All');
   const [search, setSearch] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -40,14 +41,14 @@ export default function CreatorsVaultPage3D() {
 
   useEffect(() => {
     if (!token) return;
-    apiGet('/creators?platform=youtube', token)
+    apiGet(`/creators?platform=${platform}`, token)
       .then((res) => {
         const list = Array.isArray(res) ? res : res?.creators;
         if (Array.isArray(list)) setCreators(list);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, platform]);
 
   const filtered = creators.filter((c) => {
     const cMatch = category === 'All' || c.category === category;
@@ -65,7 +66,7 @@ export default function CreatorsVaultPage3D() {
           <div className="text-xs font-mono uppercase text-cyan-400">VERIFIED ROSTER • /creators</div>
           <h1 className="text-3xl sm:text-4xl font-black mt-1">3D Holo-Creators Vault</h1>
           <p className="text-sm text-slate-400">
-            Browse verified YouTube creators rendered as interactive 3D holographic cards. Hover to tilt in 3D space.
+            Browse verified YouTube and Instagram stars rendered as interactive 3D holographic cards. Hover to tilt in 3D space.
           </p>
         </div>
 
@@ -80,6 +81,20 @@ export default function CreatorsVaultPage3D() {
               className="w-full sm:w-60 !pl-9 pr-3 py-2 bg-slate-900/90 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
             />
           </div>
+
+          <select
+            value={platform}
+            onChange={(e) => {
+              playSpatialSFX('click');
+              setPlatform(e.target.value);
+            }}
+            aria-label="Filter creators by platform"
+            className="w-full sm:w-auto bg-slate-900/90 border border-white/15 rounded-xl px-3 py-2 text-xs font-semibold text-purple-300 focus:outline-none focus:border-purple-400"
+          >
+            <option value="all">🌟 All Platforms (50 Stars)</option>
+            <option value="youtube">▶ YouTube (25 Stars)</option>
+            <option value="instagram">📸 Instagram (25 Stars)</option>
+          </select>
 
           <select
             value={category}
@@ -125,8 +140,12 @@ export default function CreatorsVaultPage3D() {
               >
                 <div className="space-y-3 depth-layer-10">
                   <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-500/20 text-red-300 border border-red-400/30">
-                      YouTube • {c.category}
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      c.platform === 'instagram'
+                        ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-400/30'
+                        : 'bg-red-500/20 text-red-300 border border-red-400/30'
+                    }`}>
+                      {c.platform === 'instagram' ? 'Instagram' : 'YouTube'} • {c.category}
                     </span>
                     <span className="font-mono text-xs font-black text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
                       {c.credit_cost} CR

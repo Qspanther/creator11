@@ -3,6 +3,7 @@ const { authenticate } = require('../middleware/auth');
 const { User, Wallet, Transaction, SystemSetting, Notification, ReferralLog, ShareLog } = require('../db/models');
 const sequelize = require('../db/index');
 const config = require('../config');
+const smartEngine = require('../services/smart-engine');
 
 const router = express.Router();
 
@@ -141,7 +142,7 @@ router.get('/status', authenticate, async (req, res) => {
     const referredUserIds = referralLogs.map(l => l.referred_user_id);
     const referredUsers = await User.findAll({
       where: { id: referredUserIds },
-      attributes: ['id', 'name', 'createdAt'],
+      attributes: ['id', 'name'],
     });
 
     const referralsList = referralLogs.map(l => {
@@ -271,84 +272,101 @@ router.post('/record-share', authenticate, async (req, res) => {
   }
 });
 
-// 3. POST /subscription/purchase — Purchase 30-Day Monthly Pass using Wallet Balance
+// 3. POST /subscription/purchase — Prioritized user_wallet lane
 router.post('/purchase', authenticate, async (req, res) => {
-  const t = await sequelize.transaction();
   try {
-    const user = await User.findByPk(req.userId, { transaction: t });
-    if (!user) {
-      await t.rollback();
-      return res.status(404).json({ error: 'User not found' });
+    const result = await smartEngine.execute('wallet', async () => {
+      const t = await sequelize.transaction();
+      try {
+        const user = await User.findByPk(req.userId, { transaction: t });
+        if (!user) {
+          await t.rollback();
+          return { errorStatus: 404, data: { error: 'User not found' } };
+        }
+
+        const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
+        if (!wallet) {
+          await t.rollback();
+          return { errorStatus: 404, data: { error: 'Wallet not found' } };
+        }
+
+        const monthlyPrice = parseFloat(await getSetting('subscription_monthly_price', '199'));
+        const durationDays = parseInt(await getSetting('subscription_duration_days', '30'));
+        const balance = parseFloat(wallet.balance) || 0;
+
+        if (balance < monthlyPrice) {
+          await t.rollback();
+          return {
+            errorStatus: 400,
+            data: {
+              error: `Insufficient wallet balance. Monthly pass is ₹${monthlyPrice.toFixed(2)}, but you have ₹${balance.toFixed(2)}.`,
+              requiresDeposit: true,
+              requiredAmount: monthlyPrice,
+              currentBalance: balance,
+              redirectTo: `/wallet?required=${monthlyPrice}`,
+            }
+          };
+        }
+
+        // Deduct subscription fee
+        const newBalance = balance - monthlyPrice;
+        await wallet.update({ balance: newBalance }, { transaction: t });
+
+        // Create transaction log
+        await Transaction.create({
+          wallet_id: wallet.id,
+          type: 'subscription',
+          amount: -monthlyPrice,
+          status: 'completed',
+          description: `Monthly Tournament Pass (${durationDays} Days) - Creator Entertainment League`,
+        }, { transaction: t });
+
+        // Compute new expiry date
+        const now = new Date();
+        let newExpiry;
+        if (user.subscription_active_until && new Date(user.subscription_active_until) > now) {
+          newExpiry = new Date(new Date(user.subscription_active_until).getTime() + durationDays * 24 * 60 * 60 * 1000);
+        } else {
+          newExpiry = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+        }
+
+        await user.update({
+          subscription_active_until: newExpiry,
+          subscription_type: 'paid_monthly',
+        }, { transaction: t });
+
+        await Notification.create({
+          user_id: user.id,
+          title: '👑 VIP Monthly Pass Activated!',
+          message: `Your monthly subscription is active until ${newExpiry.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. You can now compete in all tournaments!`,
+          type: 'subscription_success',
+        }, { transaction: t });
+
+        await t.commit();
+
+        console.log(`👑 User "${user.name}" purchased VIP Monthly Pass for ₹${monthlyPrice}. Valid until: ${newExpiry.toISOString()}`);
+
+        return {
+          status: 200,
+          data: {
+            success: true,
+            message: 'VIP Monthly subscription activated successfully!',
+            subscriptionActiveUntil: newExpiry,
+            subscriptionType: 'paid_monthly',
+            remainingBalance: newBalance,
+          }
+        };
+      } catch (error) {
+        await t.rollback();
+        throw error;
+      }
+    }, true);
+
+    if (result.errorStatus) {
+      return res.status(result.errorStatus).json(result.data);
     }
-
-    const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
-    if (!wallet) {
-      await t.rollback();
-      return res.status(404).json({ error: 'Wallet not found' });
-    }
-
-    const monthlyPrice = parseFloat(await getSetting('subscription_monthly_price', '199'));
-    const durationDays = parseInt(await getSetting('subscription_duration_days', '30'));
-    const balance = parseFloat(wallet.balance) || 0;
-
-    if (balance < monthlyPrice) {
-      await t.rollback();
-      return res.status(400).json({
-        error: `Insufficient wallet balance. Monthly pass is ₹${monthlyPrice.toFixed(2)}, but you have ₹${balance.toFixed(2)}.`,
-        requiresDeposit: true,
-        requiredAmount: monthlyPrice,
-        currentBalance: balance,
-        redirectTo: `/wallet?required=${monthlyPrice}`,
-      });
-    }
-
-    // Deduct subscription fee
-    const newBalance = balance - monthlyPrice;
-    await wallet.update({ balance: newBalance }, { transaction: t });
-
-    // Create transaction log
-    await Transaction.create({
-      wallet_id: wallet.id,
-      type: 'subscription',
-      amount: -monthlyPrice,
-      status: 'completed',
-      description: `Monthly Tournament Pass (${durationDays} Days) - Creator Entertainment League`,
-    }, { transaction: t });
-
-    // Compute new expiry date
-    const now = new Date();
-    let newExpiry;
-    if (user.subscription_active_until && new Date(user.subscription_active_until) > now) {
-      newExpiry = new Date(new Date(user.subscription_active_until).getTime() + durationDays * 24 * 60 * 60 * 1000);
-    } else {
-      newExpiry = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
-    }
-
-    await user.update({
-      subscription_active_until: newExpiry,
-      subscription_type: 'paid_monthly',
-    }, { transaction: t });
-
-    await Notification.create({
-      user_id: user.id,
-      title: '👑 VIP Monthly Pass Activated!',
-      message: `Your monthly subscription is active until ${newExpiry.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. You can now compete in all tournaments!`,
-      type: 'subscription_success',
-    }, { transaction: t });
-
-    await t.commit();
-
-    console.log(`👑 User "${user.name}" purchased VIP Monthly Pass for ₹${monthlyPrice}. Valid until: ${newExpiry.toISOString()}`);
-
-    res.json({
-      success: true,
-      message: 'VIP Monthly subscription activated successfully!',
-      subscriptionActiveUntil: newExpiry,
-      subscriptionType: 'paid_monthly',
-      remainingBalance: newBalance,
-    });
+    return res.status(result.status || 200).json(result.data);
   } catch (error) {
-    await t.rollback();
     console.error('Subscription purchase error:', error);
     res.status(500).json({ error: error.message || 'Failed to purchase subscription' });
   }

@@ -146,7 +146,7 @@ export default function LandingPage3D() {
         <div>
           <h2 className="text-2xl sm:text-3xl font-extrabold">3D Scoring Engine & Multipliers</h2>
           <p className="text-sm text-slate-400">
-            Powered by <code className="text-cyan-300 font-mono">backend/services/scoring-engine.js</code> real-time metric snapshots
+            Powered by Creator11 real-time AI scoring engine & metric snapshots
           </p>
         </div>
 

@@ -123,11 +123,25 @@ function startScheduler() {
           await takeSnapshot(t.id, 'end');
           await calculateScores(t.id);
         }
+        const sequelize = require('../db/index');
+        await sequelize.query('PRAGMA wal_checkpoint(PASSIVE);').catch(() => {});
       }
     } catch (error) {
       console.error('⚠️ Scheduler error:', error);
     }
   });
 }
+
+
+  // Hourly database maintenance: Checkpoint and truncate WAL log to guarantee slim disk footprint
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const sequelize = require('../db/index');
+      await sequelize.query('PRAGMA wal_checkpoint(TRUNCATE);');
+      console.log('🧹 [Scheduler] Hourly SQLite WAL log truncated successfully.');
+    } catch (e) {
+      console.error('⚠️ Hourly checkpoint error:', e.message);
+    }
+  });
 
 module.exports = { startScheduler };

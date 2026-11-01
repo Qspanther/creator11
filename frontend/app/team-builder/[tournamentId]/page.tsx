@@ -99,7 +99,8 @@ export default function TeamBuilder3DPage({ params }: { params: Promise<{ tourna
       setTournament(t);
       setConfig(c);
 
-      apiGet(`/creators?platform=youtube&sort=${sortBy}`, token)
+      const platform = (t?.platform || 'youtube').toLowerCase();
+      apiGet(`/creators?platform=${platform}`, token)
         .then((data) => setCreators(data))
         .finally(() => setLoading(false));
 

@@ -217,17 +217,18 @@ router.post('/tournaments', async (req, res) => {
     }
 
     const platform = String(req.body.platform || 'youtube').toLowerCase();
-    const durationType = req.body.duration_type || '24h';
-    const durationHours = config.TOURNAMENT_DURATIONS_HOURS[durationType] || 24;
+    const durationHours = parseFloat(req.body.duration_hours) || (config.TOURNAMENT_DURATIONS_HOURS[req.body.duration_type] || 24);
+    const durationType = req.body.duration_type || `${durationHours}h`;
 
     const now = new Date();
     const defaultStart = new Date(now.getTime() + 2 * 60 * 60 * 1000);
     const defaultLock = new Date(defaultStart.getTime() - (config.LOCK_BEFORE_START_MINUTES || 30) * 60 * 1000);
-    const defaultEnd = new Date(defaultStart.getTime() + durationHours * 60 * 60 * 1000);
 
     const startTime = req.body.start_time && String(req.body.start_time).trim() ? new Date(req.body.start_time) : defaultStart;
     const lockTime = req.body.lock_time && String(req.body.lock_time).trim() ? new Date(req.body.lock_time) : defaultLock;
-    const endTime = req.body.end_time && String(req.body.end_time).trim() ? new Date(req.body.end_time) : defaultEnd;
+    // Auto-calculate end_time from start_time + durationHours
+    const calculatedEnd = new Date(startTime.getTime() + durationHours * 60 * 60 * 1000);
+    const endTime = req.body.end_time && String(req.body.end_time).trim() ? new Date(req.body.end_time) : calculatedEnd;
 
     const entryFee = req.body.entry_fee !== undefined && req.body.entry_fee !== ''
       ? parseFloat(req.body.entry_fee)

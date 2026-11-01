@@ -46,7 +46,7 @@ function startScheduler() {
   }, 20000);
 
   // Run every minute to check tournament state transitions
-  cron.schedule('* * * * *', async () => {
+  cron.schedule('*/30 * * * * *', async () => {
     try {
       const now = new Date();
 

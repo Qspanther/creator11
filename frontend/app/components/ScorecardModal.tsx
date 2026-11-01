@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trophy, Crown, Zap, ExternalLink, TrendingUp, Users, ThumbsUp, Eye, Shield, Clock } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
 import { apiGet } from '../lib/api';
-import TiltCard3D from './ui/TiltCard3D';
 
 interface CreatorBreakdown {
   creatorId: string;
@@ -153,16 +152,22 @@ export default function ScorecardModal({ teamId, isOpen, onClose, team }: Scorec
   if (!effectiveTeamId && !team) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md overflow-y-auto">
-      <TiltCard3D intensity={4} className="relative w-full max-w-4xl max-h-[92vh] flex flex-col p-0 border border-cyan-400/40 shadow-2xl overflow-hidden my-auto">
-        {/* Header Bar */}
-        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-white/10 bg-white/[0.02]">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-3xl bg-[#0c101d] border border-cyan-400/40 shadow-[0_0_50px_rgba(0,240,255,0.2)] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200"
+      >
+        {/* Header Bar - Fixed at top */}
+        <div className="shrink-0 flex items-center justify-between p-4 sm:p-6 border-b border-white/10 bg-white/[0.03]">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-purple-500/20 text-slate-950 font-black text-xl">
-              <Trophy className="w-6 h-6 text-slate-950" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-purple-500/20 text-slate-950 font-black text-xl shrink-0">
+              <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-slate-950" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-400 font-bold">
                   3D LIVE ENTERTAINMENT SCORECARD
                 </span>
@@ -170,7 +175,7 @@ export default function ScorecardModal({ teamId, isOpen, onClose, team }: Scorec
                   REAL-TIME DELTAS
                 </span>
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
+              <h2 className="text-lg sm:text-2xl font-black text-white truncate">
                 {data?.userName || team?.name || '3D Creator Squad'}
               </h2>
             </div>
@@ -179,14 +184,21 @@ export default function ScorecardModal({ teamId, isOpen, onClose, team }: Scorec
           <button
             type="button"
             onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition font-bold"
+            aria-label="Close"
+            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition font-bold cursor-pointer shrink-0 ml-2"
           >
             ✕
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6">
+        {/* Content Body - Fully Scrollable */}
+        <div 
+          className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5"
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+          }}
+        >
           {loading ? (
             <div className="py-20 text-center">
               <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
@@ -199,31 +211,31 @@ export default function ScorecardModal({ teamId, isOpen, onClose, team }: Scorec
           ) : data ? (
             <>
               {/* Summary Stats Slabs */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 rounded-2xl bg-amber-500/15 border border-amber-400/40 text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-500/15 border border-amber-400/40 text-center">
                   <div className="text-[10px] uppercase font-bold text-amber-200">Contest Rank</div>
-                  <div className="text-2xl font-black text-amber-300 font-mono mt-0.5">
+                  <div className="text-xl sm:text-2xl font-black text-amber-300 font-mono mt-0.5">
                     #{data.rank || 1}
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/40 text-center">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/40 text-center">
                   <div className="text-[10px] uppercase font-bold text-emerald-200">Total 3D Points</div>
-                  <div className="text-2xl font-black text-emerald-300 font-mono mt-0.5">
+                  <div className="text-xl sm:text-2xl font-black text-emerald-300 font-mono mt-0.5">
                     {data.totalTeamPoints.toFixed(2)} pts
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-cyan-500/15 border border-cyan-400/40 text-center">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-cyan-500/15 border border-cyan-400/40 text-center">
                   <div className="text-[10px] uppercase font-bold text-cyan-200">Lineup Cap</div>
-                  <div className="text-2xl font-black text-cyan-300 font-mono mt-0.5">
-                    {data.creatorsCount || 11} / 11
+                  <div className="text-xl sm:text-2xl font-black text-cyan-300 font-mono mt-0.5">
+                    {data.creatorsCount || data.creators?.length || 11} / 11
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-purple-500/15 border border-purple-400/40 text-center">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-purple-500/15 border border-purple-400/40 text-center">
                   <div className="text-[10px] uppercase font-bold text-purple-200">Prize Won</div>
-                  <div className="text-2xl font-black text-purple-300 font-mono mt-0.5">
+                  <div className="text-xl sm:text-2xl font-black text-purple-300 font-mono mt-0.5">
                     {data.prizeWon > 0 ? `₹${data.prizeWon.toLocaleString('en-IN')}` : 'Live'}
                   </div>
                 </div>
@@ -231,53 +243,61 @@ export default function ScorecardModal({ teamId, isOpen, onClose, team }: Scorec
 
               {/* Creators Breakdown */}
               <div className="space-y-3">
-                <h3 className="text-xs font-mono uppercase tracking-wider text-slate-400 font-bold">
-                  Individual Creator Points & Growth Breakdown
-                </h3>
+                <div className="flex items-center justify-between text-xs font-mono uppercase tracking-wider text-slate-400 font-bold px-1">
+                  <span>All 11 Creators & Growth Breakdown</span>
+                  <span className="text-[10px] text-cyan-400 font-normal lowercase">Scroll to view all ↓</span>
+                </div>
 
                 <div className="space-y-2.5">
-                  {data.creators.map((c) => {
+                  {data.creators.map((c, idx) => {
                     const isCap = c.role === 'captain';
                     const isVC = c.role === 'vice_captain';
 
                     return (
                       <div
-                        key={c.creatorId}
-                        className={`p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        key={c.creatorId || idx}
+                        className={`p-3 sm:p-3.5 rounded-2xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
                           isCap
-                            ? 'bg-amber-950/20 border-amber-400/40'
+                            ? 'bg-amber-950/20 border-amber-400/40 shadow-sm shadow-amber-500/10'
                             : isVC
-                              ? 'bg-purple-950/20 border-purple-400/40'
-                              : 'bg-black/45 border-white/10'
+                              ? 'bg-purple-950/20 border-purple-400/40 shadow-sm shadow-purple-500/10'
+                              : 'bg-black/45 border-white/10 hover:border-white/20'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-slate-950 text-xs">
-                            {c.name.slice(0, 2).toUpperCase()}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-xs font-mono font-bold text-text-muted w-5 text-center shrink-0">
+                            #{idx + 1}
+                          </span>
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-slate-950 text-xs shrink-0 overflow-hidden">
+                            {c.profileImageUrl ? (
+                              <img src={c.profileImageUrl} alt={c.name} className="w-full h-full object-cover" />
+                            ) : (
+                              c.name.slice(0, 2).toUpperCase()
+                            )}
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-white">{c.name}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-bold text-white truncate">{c.name}</span>
                               {isCap && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-400 text-slate-950">
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-400 text-slate-950 shadow-sm">
                                   👑 C 2.0x
                                 </span>
                               )}
                               {isVC && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-400 text-slate-950">
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-purple-400 text-slate-950 shadow-sm">
                                   ⚡ VC 1.5x
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-400 font-mono">
+                            <div className="text-[11px] text-slate-400 font-mono mt-0.5">
                               {c.category} • {c.creditCost} Credits
                             </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-4 text-right">
-                          <div>
-                            <div className="text-base font-black text-cyan-300 font-mono">
+                        <div className="flex items-center justify-between sm:justify-end gap-4 text-right pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
+                          <div className="text-left sm:text-right">
+                            <div className="text-sm sm:text-base font-black text-cyan-300 font-mono">
                               {c.points.finalPoints.toFixed(2)} pts
                             </div>
                             <div className="text-[10px] text-slate-400">
@@ -289,11 +309,22 @@ export default function ScorecardModal({ teamId, isOpen, onClose, team }: Scorec
                     );
                   })}
                 </div>
+
+                {/* Bottom Close Button inside scroll area */}
+                <div className="pt-4 pb-2 text-center">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition cursor-pointer"
+                  >
+                    Done / Close Lineup
+                  </button>
+                </div>
               </div>
             </>
           ) : null}
         </div>
-      </TiltCard3D>
+      </div>
     </div>
   );
 }

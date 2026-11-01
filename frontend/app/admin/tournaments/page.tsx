@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth-context';
 import { apiGet, apiPut, apiPost, apiDelete } from '../../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Edit2, Check, X, Clock, Plus, LayoutDashboard, Trash2, Loader2, Bot, Users, Zap } from 'lucide-react';
+import { Trophy, Edit2, Check, X, Clock, Plus, LayoutDashboard, Trash2, Loader2, Bot, Users, Zap, Sparkles, Calendar, Timer } from 'lucide-react';
+import DateTimePicker12h from '../../components/ui/DateTimePicker12h';
 
 interface Tournament {
   id: string;
@@ -31,17 +32,56 @@ export default function AdminTournamentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deployingBotId, setDeployingBotId] = useState<string | null>(null);
-  const [addForm, setAddForm] = useState<Partial<Tournament>>({
+    const defaultStart = new Date(Date.now() + 2 * 3600000);
+  const defaultLock = new Date(Date.now() + 1.5 * 3600000);
+
+  const [addForm, setAddForm] = useState<{
+    name: string;
+    platform: string;
+    entry_fee: number;
+    prize_pool: number;
+    start_time: string;
+    lock_time: string;
+    duration_hours: number;
+    status: string;
+  }>({
     name: '',
     platform: 'youtube',
-    duration_type: '24h',
     entry_fee: 99,
     prize_pool: 50000,
-    start_time: '',
-    lock_time: '',
-    end_time: '',
+    start_time: defaultStart.toISOString(),
+    lock_time: defaultLock.toISOString(),
+    duration_hours: 6,
     status: 'upcoming'
   });
+
+  const format12h = (dateStr?: string | Date) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'N/A';
+      return d.toLocaleDateString('en-IN', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return String(dateStr);
+    }
+  };
+
+  const getCalculatedEndTime = () => {
+    try {
+      const s = addForm.start_time ? new Date(addForm.start_time) : new Date();
+      const hrs = Number(addForm.duration_hours) || 6;
+      return new Date(s.getTime() + hrs * 3600000);
+    } catch {
+      return new Date();
+    }
+  };
 
   const [showContestModal, setShowContestModal] = useState(false);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
@@ -97,7 +137,7 @@ export default function AdminTournamentsPage() {
     }
   };
 
-  const handleAddLeague = async () => {
+    const handleAddLeague = async () => {
     if (isSubmitting) return;
     if (!addForm.name || !addForm.name.trim()) {
       alert('Please enter a league name');
@@ -105,24 +145,34 @@ export default function AdminTournamentsPage() {
     }
     setIsSubmitting(true);
     try {
-      const now = Date.now();
+      const durationHours = Number(addForm.duration_hours) || 6;
+      const startDate = addForm.start_time ? new Date(addForm.start_time) : new Date(Date.now() + 2 * 3600000);
+      const lockDate = addForm.lock_time ? new Date(addForm.lock_time) : new Date(startDate.getTime() - 30 * 60000);
+      const calculatedEndDate = new Date(startDate.getTime() + durationHours * 3600000);
+
       const payload = {
-        ...addForm,
-        start_time: addForm.start_time || new Date(now + 2 * 3600000).toISOString(),
-        lock_time: addForm.lock_time || new Date(now + 1.5 * 3600000).toISOString(),
-        end_time: addForm.end_time || new Date(now + 26 * 3600000).toISOString(),
+        name: addForm.name.trim(),
+        platform: addForm.platform,
+        duration_type: `${durationHours}h`,
+        duration_hours: durationHours,
+        entry_fee: Number(addForm.entry_fee) || 99,
+        prize_pool: Number(addForm.prize_pool) || 50000,
+        start_time: startDate.toISOString(),
+        lock_time: lockDate.toISOString(),
+        end_time: calculatedEndDate.toISOString(),
+        status: 'upcoming'
       };
+
       await apiPost('/admin/tournaments', payload, token);
       setShowAddModal(false);
       setAddForm({
         name: '',
         platform: 'youtube',
-        duration_type: '24h',
         entry_fee: 99,
         prize_pool: 50000,
-        start_time: '',
-        lock_time: '',
-        end_time: '',
+        start_time: new Date(Date.now() + 2 * 3600000).toISOString(),
+        lock_time: new Date(Date.now() + 1.5 * 3600000).toISOString(),
+        duration_hours: 6,
         status: 'upcoming'
       });
       fetchTournaments();
@@ -196,124 +246,215 @@ export default function AdminTournamentsPage() {
         </button>
       </motion.div>
 
-      {/* Add League Modal */}
+      {/* Add League Modal with 12h Clock & Auto-calculated End Time */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-dark-bg border border-neon-purple/50 rounded-2xl p-6 w-full max-w-md shadow-2xl">
-            <h2 className="text-2xl font-bold mb-4 text-white">Create New League</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            className="bg-[#0e1322] border border-neon-cyan/40 rounded-3xl p-5 sm:p-6 w-full max-w-xl shadow-[0_0_50px_rgba(0,240,255,0.15)] my-auto max-h-[92vh] overflow-y-auto"
+          >
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-neon-cyan/15 border border-neon-cyan/30 flex items-center justify-center text-neon-cyan">
+                  <Trophy size={18} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-white">Create Battle League</h2>
+                  <p className="text-[11px] text-text-muted">12-Hour AM/PM schedule with automatic end time calculation</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-text-muted hover:text-white flex items-center justify-center transition"
+              >
+                ✕
+              </button>
+            </div>
+
             <div className="space-y-4">
+              {/* League Name & Platform */}
               <div>
-                <label className="block text-xs text-text-muted mb-1">League Name</label>
+                <label className="block text-xs font-semibold text-text-primary mb-1">League Name</label>
                 <input 
                   type="text" 
                   disabled={isSubmitting}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple disabled:opacity-50" 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none focus:border-neon-cyan transition-colors disabled:opacity-50" 
                   value={addForm.name} 
                   onChange={e => setAddForm({...addForm, name: e.target.value})} 
-                  placeholder="e.g. Creator Cup" 
+                  placeholder="e.g. YouTube 6-Hour Mega Blitz" 
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">Platform</label>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">Platform</label>
                   <select 
                     disabled={isSubmitting}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple disabled:opacity-50" 
+                    className="w-full bg-[#121624] border border-white/10 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white outline-none focus:border-neon-cyan disabled:opacity-50" 
                     value={addForm.platform} 
                     onChange={e => setAddForm({...addForm, platform: e.target.value})}
                   >
                     <option value="youtube">YouTube (Active League)</option>
+                    <option value="instagram">Instagram</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs text-text-muted mb-1">Duration</label>
-                  <select 
-                    disabled={isSubmitting}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple disabled:opacity-50" 
-                    value={addForm.duration_type} 
-                    onChange={e => setAddForm({...addForm, duration_type: e.target.value})}
-                  >
-                    <option value="6h">Flash Blitz (6-Hour)</option>
-                    <option value="24h">Daily Battle (24-Hour)</option>
-                    <option value="48h">Weekend Clash (48-Hour)</option>
-                    <option value="72h">Weekly Showdown (72-Hour)</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-text-muted mb-1">Entry Fee (₹ INR)</label>
+                  <label className="block text-xs font-semibold text-text-primary mb-1">Entry Fee (₹ INR)</label>
                   <input 
                     type="number" 
                     disabled={isSubmitting}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple disabled:opacity-50" 
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white font-mono outline-none focus:border-neon-cyan disabled:opacity-50" 
                     value={addForm.entry_fee} 
-                    onChange={e => setAddForm({...addForm, entry_fee: e.target.value})} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-text-muted mb-1">Prize Pool (₹ INR)</label>
-                  <input 
-                    type="number" 
-                    disabled={isSubmitting}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple disabled:opacity-50" 
-                    value={addForm.prize_pool} 
-                    onChange={e => setAddForm({...addForm, prize_pool: e.target.value})} 
+                    onChange={e => setAddForm({...addForm, entry_fee: Number(e.target.value)})} 
                   />
                 </div>
               </div>
+
               <div>
-                <label className="block text-xs text-text-muted mb-1">Start Time</label>
+                <label className="block text-xs font-semibold text-text-primary mb-1">Prize Pool (₹ INR)</label>
                 <input 
-                  type="datetime-local" 
+                  type="number" 
                   disabled={isSubmitting}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple disabled:opacity-50" 
-                  value={addForm.start_time} 
-                  onChange={e => setAddForm({...addForm, start_time: e.target.value})} 
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white font-mono outline-none focus:border-neon-cyan disabled:opacity-50" 
+                  value={addForm.prize_pool} 
+                  onChange={e => setAddForm({...addForm, prize_pool: Number(e.target.value)})} 
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-text-muted mb-1">Lock Time</label>
-                  <input 
-                    type="datetime-local" 
-                    disabled={isSubmitting}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple disabled:opacity-50" 
-                    value={addForm.lock_time} 
-                    onChange={e => setAddForm({...addForm, lock_time: e.target.value})} 
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-text-muted mb-1">End Time</label>
-                  <input 
-                    type="datetime-local" 
-                    disabled={isSubmitting}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple disabled:opacity-50" 
-                    value={addForm.end_time} 
-                    onChange={e => setAddForm({...addForm, end_time: e.target.value})} 
-                  />
+
+              {/* 12-Hour Lock Time */}
+              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2">
+                <DateTimePicker12h
+                  label="1. League Lock Time (Team Editing Closes)"
+                  sublabel="12-Hour AM/PM format"
+                  value={addForm.lock_time}
+                  disabled={isSubmitting}
+                  onChange={(iso) => setAddForm(prev => ({ ...prev, lock_time: iso }))}
+                />
+                <div className="flex items-center gap-2 pt-1 text-[11px] text-text-muted">
+                  <span>Quick Lock Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const start = new Date(addForm.start_time);
+                      const lock = new Date(start.getTime() - 15 * 60000);
+                      setAddForm(prev => ({ ...prev, lock_time: lock.toISOString() }));
+                    }}
+                    className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-cyan-300 font-medium"
+                  >
+                    15m Before Start
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const start = new Date(addForm.start_time);
+                      const lock = new Date(start.getTime() - 30 * 60000);
+                      setAddForm(prev => ({ ...prev, lock_time: lock.toISOString() }));
+                    }}
+                    className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-cyan-300 font-medium"
+                  >
+                    30m Before Start
+                  </button>
                 </div>
               </div>
+
+              {/* 12-Hour Start Time */}
+              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2">
+                <DateTimePicker12h
+                  label="2. League Start Time (Contest Begins & Live Tracking Starts)"
+                  sublabel="12-Hour AM/PM format"
+                  value={addForm.start_time}
+                  disabled={isSubmitting}
+                  onChange={(iso) => {
+                    const newStart = new Date(iso);
+                    // auto-adjust lock time to 30 mins before new start if lock was before
+                    const newLock = new Date(newStart.getTime() - 30 * 60000);
+                    setAddForm(prev => ({ ...prev, start_time: iso, lock_time: newLock.toISOString() }));
+                  }}
+                />
+              </div>
+
+              {/* Duration in Hours (kitne ghante chalegi ye league) */}
+              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
+                    <Timer size={14} className="text-amber-400" />
+                    <span>3. League Duration (Kitne Ghante Chalegi Ye League?)</span>
+                  </label>
+                  <span className="text-xs font-black text-amber-300 font-mono">
+                    {addForm.duration_hours} Hours
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="168"
+                    disabled={isSubmitting}
+                    value={addForm.duration_hours}
+                    onChange={(e) => setAddForm(prev => ({ ...prev, duration_hours: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
+                    className="w-24 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white font-mono font-bold outline-none focus:border-amber-400 disabled:opacity-50"
+                  />
+                  <span className="text-xs text-text-muted">hours</span>
+
+                  {/* Preset Duration Buttons */}
+                  <div className="flex items-center gap-1.5 flex-wrap ml-auto">
+                    {[6, 12, 24, 48, 72].map((hrs) => (
+                      <button
+                        key={hrs}
+                        type="button"
+                        onClick={() => setAddForm(prev => ({ ...prev, duration_hours: hrs }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
+                          addForm.duration_hours === hrs
+                            ? 'bg-amber-400 text-black shadow-md'
+                            : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {hrs}h
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Auto-Calculated End Time Display (End time ka manual input khatam) */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-cyan-500/10 to-transparent border border-emerald-400/40 space-y-1">
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
+                  <Sparkles size={14} className="text-emerald-400" />
+                  <span>Calculated League End Time (Auto-Calculated)</span>
+                </div>
+                <div className="text-base font-extrabold text-white">
+                  {format12h(getCalculatedEndTime())}
+                </div>
+                <p className="text-[10px] text-text-muted">
+                  ✓ End time is computed automatically as <strong>Start Time + {addForm.duration_hours} Hours</strong>. You do not need to enter end time manually.
+                </p>
+              </div>
             </div>
+
             <div className="flex gap-3 mt-6">
               <button 
+                type="button"
                 disabled={isSubmitting} 
                 onClick={() => setShowAddModal(false)} 
-                className="flex-1 py-2 rounded-lg bg-white/10 text-white font-medium hover:bg-white/20 transition-colors disabled:opacity-50"
+                className="flex-1 py-2.5 rounded-xl bg-white/10 text-white font-medium hover:bg-white/20 transition-colors disabled:opacity-50 text-xs sm:text-sm"
               >
                 Cancel
               </button>
               <button 
+                type="button"
                 disabled={isSubmitting} 
                 onClick={handleAddLeague} 
-                className="flex-1 py-2 rounded-lg bg-neon-purple text-white font-medium shadow-[0_0_15px_rgba(176,38,255,0.4)] hover:shadow-[0_0_25px_rgba(176,38,255,0.6)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-bold shadow-[0_0_20px_rgba(176,38,255,0.4)] hover:shadow-[0_0_30px_rgba(176,38,255,0.6)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 size={16} className="animate-spin" /> Creating...
+                    <Loader2 size={16} className="animate-spin" /> Creating League...
                   </>
                 ) : (
-                  'Create League'
+                  'Create League Now'
                 )}
               </button>
             </div>
@@ -430,7 +571,7 @@ export default function AdminTournamentsPage() {
                       className="bg-dark-bg border border-white/20 rounded px-2 py-1 text-sm outline-none"
                     />
                   ) : (
-                    <span className="text-sm flex items-center gap-2"><Clock size={14} className="text-text-muted"/> {new Date(t.start_time).toLocaleString()}</span>
+                    <span className="text-sm flex items-center gap-2"><Clock size={14} className="text-text-muted"/> {format12h(t.start_time)}</span>
                   )}
                 </td>
                 <td className="p-4">

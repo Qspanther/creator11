@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const compression = require('compression');
 const { memoryCache } = require('./middleware/cache');
+const { idempotency } = require('./middleware/idempotency');
 const config = require('./config');
 const sequelize = require('./db/index');
 require('./db/models'); // Load all models and associations
@@ -80,7 +81,7 @@ app.use('/auth', require('./routes/auth'));
 app.use('/api/config', memoryCache(30), require('./routes/config'));
 app.use('/tournaments', memoryCache(5), require('./routes/tournaments'));
 app.use('/creators', memoryCache(15), require('./routes/creators'));
-app.use('/teams', require('./routes/teams'));
+app.use('/teams', idempotency(5), require('./routes/teams'));
 app.use('/wallet', require('./routes/wallet'));
 app.use('/leaderboard', memoryCache(3), require('./routes/leaderboard'));
 app.use('/admin', require('./routes/admin'));
@@ -88,6 +89,8 @@ app.use('/notifications', require('./routes/notifications'));
 app.use('/contests', require('./routes/contests'));
 app.use('/bot-manager', require('./routes/bot-manager'));
 app.use('/subscription', require('./routes/subscription'));
+app.use('/gamification', require('./routes/gamification'));
+app.use('/live-stream', require('./routes/live-stream'));
 
 // Health & Root status checks
 app.get('/', (req, res) => {

@@ -5,7 +5,9 @@ import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import TiltCard3D from '../components/ui/TiltCard3D';
 import { playSpatialSFX } from '../components/ui/StageControls3D';
-import { Search, ExternalLink, Video, Eye, Heart, X, Sparkles } from 'lucide-react';
+import { Search, ExternalLink, Video, Eye, Heart, X, Sparkles, ArrowRightLeft } from 'lucide-react';
+import { CreatorSkeleton } from '../components/ui/Skeleton';
+import CreatorComparisonModal from '../components/CreatorComparisonModal';
 
 interface Creator {
   id: string;
@@ -38,6 +40,7 @@ export default function CreatorsVaultPage3D() {
   const [search, setSearch] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [modalCreator, setModalCreator] = useState<Creator | null>(null);
+  const [showCompare, setShowCompare] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -112,12 +115,26 @@ export default function CreatorsVaultPage3D() {
             <option value="Tech">Tech</option>
             <option value="Lifestyle">Lifestyle</option>
           </select>
+
+          <button
+            type="button"
+            onClick={() => {
+              playSpatialSFX('click');
+              setShowCompare(true);
+            }}
+            className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-neon-purple/20 to-neon-cyan/20 border border-cyan-400/30 hover:border-cyan-400 text-cyan-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
+          >
+            <ArrowRightLeft size={14} />
+            <span>Compare Stars</span>
+          </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+            <CreatorSkeleton key={i} />
+          ))}
         </div>
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -273,6 +290,15 @@ export default function CreatorsVaultPage3D() {
           </TiltCard3D>
         </div>
       )}
+
+      {/* Head-to-Head Comparison Matrix Modal */}
+      <CreatorComparisonModal
+        isOpen={showCompare}
+        onClose={() => setShowCompare(false)}
+        creators={creators}
+        initialCreatorA={modalCreator || creators[0]}
+        initialCreatorB={creators[1] || creators[0]}
+      />
     </div>
   );
 }

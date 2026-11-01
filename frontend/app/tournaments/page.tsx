@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth-context';
 import TiltCard3D from '../components/ui/TiltCard3D';
 import { playSpatialSFX } from '../components/ui/StageControls3D';
 import { Trophy, Clock, Users, ArrowRight, BarChart3, ShieldCheck } from 'lucide-react';
+import { CardSkeleton } from '../components/ui/Skeleton';
 
 function CountdownTimer({ targetDate }: { targetDate: string }) {
   const [timeLeft, setTimeLeft] = useState('');
@@ -85,8 +86,10 @@ export default function TournamentsPage3D() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">

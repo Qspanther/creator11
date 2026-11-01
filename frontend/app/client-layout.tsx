@@ -9,6 +9,7 @@ import AdminSidebar from './components/layout/AdminSidebar';
 import TopBar from './components/layout/TopBar';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import StageControls3D from './components/ui/StageControls3D';
+import NetworkStatus from './components/ui/NetworkStatus';
 
 const ParticleBackground = dynamic(() => import('./components/three/ParticleBackground'), {
   ssr: false,
@@ -36,6 +37,11 @@ function AppShell({ children }: { children: ReactNode }) {
       if (isAdminRoute && user?.role !== 'admin') {
         router.push('/dashboard');
       }
+    }
+
+    // Register PWA Service Worker
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   }, [loading, isAuthenticated, isPublicPage, isAuthPage, isAdminRoute, user, router]);
 
@@ -75,6 +81,9 @@ function AppShell({ children }: { children: ReactNode }) {
           <MobileBottomNav />
         </div>
       )}
+
+      {/* Soft Offline & Reconnection Alert */}
+      <NetworkStatus />
     </div>
   );
 }

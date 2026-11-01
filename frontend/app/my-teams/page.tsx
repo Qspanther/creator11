@@ -8,6 +8,7 @@ import TiltCard3D from '../components/ui/TiltCard3D';
 import ScorecardModal from '../components/ScorecardModal';
 import { playSpatialSFX } from '../components/ui/StageControls3D';
 import { Shield, Crown, Star, Trophy, Clock, Edit, BarChart3, Users } from 'lucide-react';
+import { CardSkeleton } from '../components/ui/Skeleton';
 
 function CountdownTimer({ targetDate }: { targetDate: string }) {
   const [timeLeft, setTimeLeft] = useState('');
@@ -69,8 +70,10 @@ export default function MyTeamsPage3D() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
         </div>
       ) : teams.length === 0 ? (
         <TiltCard3D className="p-12 text-center max-w-lg mx-auto space-y-4 border border-white/10">

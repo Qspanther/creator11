@@ -7,6 +7,7 @@ import { useAuth } from '../lib/auth-context';
 import TiltCard3D from '../components/ui/TiltCard3D';
 import { playSpatialSFX } from '../components/ui/StageControls3D';
 import { Trophy, Users, TrendingUp, Wallet, Sparkles, ArrowRight, Video, ShieldCheck, Flame } from 'lucide-react';
+import DailyStreakBadge from '../components/DailyStreakBadge';
 
 export default function DashboardPage3D() {
   const { user, token } = useAuth();
@@ -78,6 +79,9 @@ export default function DashboardPage3D() {
           </div>
         </div>
       </TiltCard3D>
+
+      {/* Daily Login Streak & Mystery Bonus Widget */}
+      <DailyStreakBadge />
 
       {/* 3D Telemetry Grid */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">

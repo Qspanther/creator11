@@ -571,6 +571,55 @@ function probePort(host, port, timeoutMs = 1500) {
   });
 }
 
+// GET /auth/test-smtp-timing — Tests exact timing and step-by-step handshake to smtp.gmail.com
+router.get('/test-smtp-timing', async (req, res) => {
+  const nodemailer = require('nodemailer');
+  const results = {};
+
+  // Test Port 465
+  const t0 = Date.now();
+  try {
+    const t465 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: { user: 'qspanther@gmail.com', pass: 'tpomlfxmgbytfoko' },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+      tls: { rejectUnauthorized: false },
+    });
+    await t465.verify();
+    results.port465 = { success: true, durationMs: Date.now() - t0 };
+  } catch (e) {
+    results.port465 = { success: false, durationMs: Date.now() - t0, error: e.message, code: e.code };
+  }
+
+  // Test Port 587
+  const t1 = Date.now();
+  try {
+    const t587 = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false,
+      auth: { user: 'qspanther@gmail.com', pass: 'tpomlfxmgbytfoko' },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 10000,
+      tls: { rejectUnauthorized: false },
+    });
+    await t587.verify();
+    results.port587 = { success: true, durationMs: Date.now() - t1 };
+  } catch (e) {
+    results.port587 = { success: false, durationMs: Date.now() - t1, error: e.message, code: e.code };
+  }
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    results,
+  });
+});
+
 // GET /auth/diagnostic — Instant server-side diagnostic to check Render egress network & env status
 router.get('/diagnostic', async (req, res) => {
   try {

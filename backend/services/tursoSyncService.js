@@ -147,7 +147,11 @@ async function syncTablesToTurso(tables = SYNC_TABLES) {
     await client.execute('PRAGMA foreign_keys = ON;').catch(() => {});
     return { success: true, syncedCount };
   } catch (err) {
-    console.error('⚠️ [TursoSync] Push error:', err.message);
+    if (err.message && (err.message.includes('blocked') || err.message.includes('quota'))) {
+      console.warn('⚠️ [TursoSync] Turso write quota reached. Changes safely preserved in primary database.');
+    } else {
+      console.error('⚠️ [TursoSync] Push error:', err.message);
+    }
     return { success: false, error: err.message };
   }
 }
@@ -234,14 +238,9 @@ async function initTursoSync() {
       console.log(`📊 [TursoSync] Local database contains ${localUsers} users. Live sync active.`);
     }
 
-    // Auto-schedule periodic cloud sync every 3 minutes
-    setInterval(async () => {
-      try {
-        await syncToTurso();
-      } catch (err) {
-        console.warn('⚠️ [TursoSync] Periodic sync notice:', err.message);
-      }
-    }, 3 * 60 * 1000);
+    // Periodic sync: disabled aggressive 3-minute full dump to prevent burning Turso write quota.
+    // Instead, real-time triggerInstantSync handles live user changes efficiently.
+    console.log('⚡ [TursoSync] Efficient event-driven sync engine active.');
 
     return { enabled: true, connected: true };
   } catch (error) {

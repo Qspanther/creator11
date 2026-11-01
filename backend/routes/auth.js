@@ -69,7 +69,6 @@ router.post('/signup', async (req, res) => {
         userId: existing.id,
         email: existing.email,
         referralCode: existing.referral_code,
-        otpHint: otp_code,
       });
     }
 
@@ -199,7 +198,6 @@ router.post('/signup', async (req, res) => {
       userId: user.id,
       email: user.email,
       referralCode: newReferralCode,
-      otpHint: otp_code,
     });
   } catch (error) {
     console.error('Signup error:', error);
@@ -295,7 +293,6 @@ router.post('/resend-otp', async (req, res) => {
       success: true,
       message: 'A fresh OTP has been sent to your email. Please check your inbox and spam folder.',
       email: cleanEmail,
-      otpHint: otp_code,
     });
   } catch (error) {
     console.error('Resend OTP error:', error);
@@ -430,7 +427,6 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({
       message: 'OTP sent to your email. Please check your inbox and spam folder.',
-      otpHint: otp_code,
     });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });

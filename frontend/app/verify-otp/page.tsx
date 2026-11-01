@@ -17,15 +17,12 @@ export default function VerifyOtpPage() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [cooldown, setCooldown] = useState(30);
-  const [otpHint, setOtpHint] = useState('');
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
     const e = sessionStorage.getItem('otp_email');
     if (e) setEmail(e);
-    const h = sessionStorage.getItem('otp_hint');
-    if (h) setOtpHint(h);
   }, []);
 
   // Cooldown countdown timer
@@ -66,10 +63,6 @@ export default function VerifyOtpPage() {
     try {
       const res: any = await apiPost('/auth/resend-otp', { email: email.trim() });
       setSuccessMsg(res.message || 'Fresh OTP sent! Please check your email inbox and spam folder.');
-      if (res?.otpHint) {
-        setOtpHint(res.otpHint);
-        sessionStorage.setItem('otp_hint', res.otpHint);
-      }
       setCooldown(30);
     } catch (err: any) {
       setError(err.message || 'Failed to resend OTP. Please try again.');
@@ -147,22 +140,6 @@ export default function VerifyOtpPage() {
             <div className="mb-4 p-3 rounded-xl bg-success/10 border border-success/20 text-xs text-success flex items-center gap-2 font-medium">
               <CheckCircle2 size={16} className="shrink-0" />
               <span>{successMsg}</span>
-            </div>
-          )}
-
-          {otpHint && (
-            <div className="mb-4 p-3.5 rounded-xl bg-gradient-to-r from-neon-purple/20 to-neon-cyan/20 border border-neon-cyan/40 flex items-center justify-between gap-3 shadow-lg">
-              <div className="space-y-0.5">
-                <p className="text-[10px] text-text-muted uppercase tracking-wider font-semibold">Verification Code</p>
-                <p className="text-base font-black tracking-widest text-neon-cyan font-mono">{otpHint}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOtp(otpHint)}
-                className="px-3 py-1.5 rounded-lg bg-neon-cyan text-black font-extrabold text-xs hover:bg-white hover:scale-105 transition-all shadow-md active:scale-95"
-              >
-                Auto-Fill
-              </button>
             </div>
           )}
 

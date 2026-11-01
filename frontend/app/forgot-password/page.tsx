@@ -13,7 +13,6 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [otpHint, setOtpHint] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
@@ -35,8 +34,7 @@ export default function ForgotPasswordPage() {
     setError('');
     setSuccessMsg('');
     try {
-      const res: any = await apiPost('/auth/forgot-password', { email: email.trim() });
-      if (res?.otpHint) setOtpHint(res.otpHint);
+      await apiPost('/auth/forgot-password', { email: email.trim() });
       setSuccessMsg(`OTP sent to ${email.trim()}! Please check your inbox and spam folder.`);
       setCooldown(30);
       setStep(2);
@@ -53,8 +51,7 @@ export default function ForgotPasswordPage() {
     setError('');
     setSuccessMsg('');
     try {
-      const res: any = await apiPost('/auth/forgot-password', { email: email.trim() });
-      if (res?.otpHint) setOtpHint(res.otpHint);
+      await apiPost('/auth/forgot-password', { email: email.trim() });
       setSuccessMsg(`Fresh password reset OTP sent to ${email.trim()}!`);
       setCooldown(30);
     } catch (err: any) {
@@ -124,22 +121,6 @@ export default function ForgotPasswordPage() {
             </form>
           ) : (
             <form onSubmit={handleResetPassword} className="space-y-4">
-              {otpHint && (
-                <div className="p-3.5 rounded-xl bg-gradient-to-r from-neon-purple/20 to-neon-cyan/20 border border-neon-cyan/40 flex items-center justify-between gap-3 shadow-lg">
-                  <div className="space-y-0.5">
-                    <p className="text-[10px] text-text-muted uppercase tracking-wider font-semibold">Verification Code</p>
-                    <p className="text-base font-black tracking-widest text-neon-cyan font-mono">{otpHint}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setOtp(otpHint)}
-                    className="px-3 py-1.5 rounded-lg bg-neon-cyan text-black font-extrabold text-xs hover:bg-white hover:scale-105 transition-all shadow-md active:scale-95"
-                  >
-                    Auto-Fill
-                  </button>
-                </div>
-              )}
-
               <div>
                 <label className="block text-xs text-text-muted mb-1 font-semibold uppercase tracking-wider">
                   6-Digit OTP

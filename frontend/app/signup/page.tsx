@@ -28,12 +28,9 @@ export default function SignupPage() {
     setLoading(true);
     setError('');
     try {
-      const res: any = await apiPost('/auth/signup', form);
+      await apiPost('/auth/signup', form);
       // Store email for OTP verification page
       sessionStorage.setItem('otp_email', form.email);
-      if (res?.otpHint) {
-        sessionStorage.setItem('otp_hint', res.otpHint);
-      }
       router.push('/verify-otp');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Signup failed');

@@ -120,7 +120,7 @@ async function seed() {
   try {
     console.log('🌱 Seeding database...');
 
-    await sequelize.sync({ force: true });
+    await sequelize.sync();
 
     // ─── 4. Mock Users & Teams ───
     console.log('Seeding users and teams...');

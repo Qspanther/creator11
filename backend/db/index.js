@@ -7,11 +7,13 @@ const isPostgres = process.env.DATABASE_URL &&
   (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'));
 
 if (isPostgres) {
+  const sslConfig = process.env.DB_SSL === 'false'
+    ? false
+    : { require: false, rejectUnauthorized: false };
+
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
-    dialectOptions: {
-      ssl: process.env.DB_SSL === 'false' ? false : { require: true, rejectUnauthorized: false },
-    },
+    dialectOptions: sslConfig ? { ssl: sslConfig } : {},
     logging: false,
     pool: { max: 10, min: 2, acquire: 30000, idle: 10000 },
     define: { timestamps: true, underscored: true },
@@ -41,8 +43,12 @@ if (isPostgres) {
   });
 }
 
-// Configure WAL mode, synchronous, memory cache, and high-performance indexes
+// Configure WAL mode, synchronous, memory cache, and high-performance indexes (SQLite only)
 sequelize.authenticate().then(async () => {
+  if (isPostgres) {
+    console.log('🐘 Cloud PostgreSQL authenticated & ready.');
+    return;
+  }
   try {
     await sequelize.query('PRAGMA journal_mode = WAL;');
     await sequelize.query('PRAGMA synchronous = NORMAL;');

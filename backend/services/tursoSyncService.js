@@ -13,6 +13,10 @@ const DEFAULT_TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLC
 let tursoClient = null;
 
 function isTursoConfigured() {
+  // If native Cloud PostgreSQL (DATABASE_URL) is active, skip Turso completely
+  if (process.env.DATABASE_URL && (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'))) {
+    return false;
+  }
   const url = process.env.TURSO_DATABASE_URL || DEFAULT_TURSO_URL;
   const token = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || DEFAULT_TURSO_TOKEN;
   return Boolean(url && token);

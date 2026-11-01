@@ -6,6 +6,7 @@ const { Team, TeamCreator, Creator, Tournament, Wallet, Transaction, User, Syste
 const sequelize = require('../db/index');
 const { getTeamScorecard } = require('../services/scoring-engine');
 const smartEngine = require('../services/smart-engine');
+const { triggerInstantSync } = require('../services/tursoSyncService');
 
 const router = express.Router();
 
@@ -294,6 +295,10 @@ router.post('/', authenticate, async (req, res) => {
         throw error;
       }
     }, true);
+
+    if (teamResult.status === 201 || !teamResult.errorStatus) {
+      triggerInstantSync(['teams', 'team_creators']);
+    }
 
     if (teamResult.errorStatus) {
       return res.status(teamResult.errorStatus).json(teamResult.data);

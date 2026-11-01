@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const { User, Wallet, SystemSetting, ReferralLog, Notification } = require('../db/models');
 const { sendSignupOtp, sendPasswordResetOtp } = require('../services/emailService');
+const { triggerInstantSync } = require('../services/tursoSyncService');
 
 const { authenticate } = require('../middleware/auth');
 const router = express.Router();
@@ -54,7 +55,9 @@ router.post('/signup', async (req, res) => {
         otp_expires_at,
       });
 
-      sendSignupOtp({
+      triggerInstantSync(['users']);
+
+      await sendSignupOtp({
         toEmail: cleanEmail,
         name: cleanName,
         otp: otp_code,
@@ -62,7 +65,7 @@ router.post('/signup', async (req, res) => {
       }).catch(err => console.error('Email send error (signup resend):', err.message));
 
       return res.status(200).json({
-        message: 'Account pending verification. Fresh OTP sent to your email.',
+        message: 'Account pending verification. Fresh OTP sent to your email. Please check your inbox and spam folder.',
         userId: existing.id,
         email: existing.email,
         referralCode: existing.referral_code,
@@ -179,8 +182,11 @@ router.post('/signup', async (req, res) => {
       }
     }
 
-    // Send real OTP email (non-blocking — signup succeeds even if mail fails)
-    sendSignupOtp({
+    // Instant real-time sync of new user and wallet to Turso Cloud (<800ms)
+    triggerInstantSync(['users', 'wallets', 'referral_logs']);
+
+    // Send real OTP email with dual-port failover
+    await sendSignupOtp({
       toEmail: cleanEmail,
       name: cleanName,
       otp: otp_code,
@@ -188,7 +194,7 @@ router.post('/signup', async (req, res) => {
     }).catch(err => console.error('Email send error (signup):', err.message));
 
     res.status(201).json({
-      message: 'Account created. OTP sent to your email. Please verify.',
+      message: 'Account created. OTP sent to your email. Please check your inbox and spam folder.',
       userId: user.id,
       email: user.email,
       referralCode: newReferralCode,
@@ -228,6 +234,7 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     await user.update({ otp_verified: true, otp_code: null });
+    triggerInstantSync(['users']);
 
     // Issue JWT
     const token = jwt.sign({ userId: user.id }, config.JWT_SECRET, {
@@ -273,6 +280,7 @@ router.post('/resend-otp', async (req, res) => {
     const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
 
     await user.update({ otp_code, otp_expires_at });
+    triggerInstantSync(['users']);
 
     await sendSignupOtp({
       toEmail: cleanEmail,
@@ -420,16 +428,17 @@ router.post('/forgot-password', async (req, res) => {
     const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
     
     await user.update({ otp_code, otp_expires_at });
+    triggerInstantSync(['users']);
 
-    // Send real password reset OTP email
-    sendPasswordResetOtp({
+    // Send real password reset OTP email with dual-port failover
+    await sendPasswordResetOtp({
       toEmail: cleanEmail,
       name: user.name,
       otp: otp_code,
       expiryMinutes: config.OTP_EXPIRY_MINUTES,
     }).catch(err => console.error('Email send error (forgot-password):', err.message));
 
-    res.json({ message: 'OTP sent to your email.' });
+    res.json({ message: 'OTP sent to your email. Please check your inbox and spam folder.' });
   } catch (error) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -453,6 +462,7 @@ router.post('/reset-password', async (req, res) => {
 
     const password_hash = await bcrypt.hash(cleanNewPassword, 10);
     await user.update({ password_hash, otp_code: null });
+    triggerInstantSync(['users']);
 
     res.json({ message: 'Password reset successful' });
   } catch (error) {
@@ -465,7 +475,8 @@ router.put('/change-password', authenticate, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Missing fields' });
-    if (String(newPassword).length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    const cleanNewPassword = String(newPassword || '');
+    if (cleanNewPassword.length < 6) return res.status(400).json({ error: 'New password must be at least 6 characters' });
 
     const user = await User.findByPk(req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -475,6 +486,7 @@ router.put('/change-password', authenticate, async (req, res) => {
 
     const password_hash = await bcrypt.hash(cleanNewPassword, 10);
     await user.update({ password_hash });
+    triggerInstantSync(['users']);
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {

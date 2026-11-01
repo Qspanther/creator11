@@ -3,6 +3,7 @@ const { authenticate } = require('../middleware/auth');
 const { Wallet, Transaction, User, Notification, SystemSetting } = require('../db/models');
 const sequelize = require('../db/index');
 const smartEngine = require('../services/smart-engine');
+const { triggerInstantSync } = require('../services/tursoSyncService');
 
 const router = express.Router();
 
@@ -123,6 +124,8 @@ router.post('/deposit-request', authenticate, async (req, res) => {
       message: `Your deposit proof of ₹${numAmount.toLocaleString('en-IN')} via ${payMethod} (UTR: ${referenceNumber}) has been submitted. It will be verified shortly.`,
       type: 'wallet_deposit',
     });
+
+    triggerInstantSync(['wallets', 'transactions']);
 
     res.json({
       message: 'Deposit proof submitted successfully! Balance will be credited upon verification.',

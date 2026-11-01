@@ -76,7 +76,6 @@ async function pullFromTurso() {
 
       await sequelize.query('PRAGMA foreign_keys = OFF;');
       
-      // Batch insert with chunking for high performance
       const chunkSize = 200;
       for (let i = 0; i < rows.length; i += chunkSize) {
         const chunk = rows.slice(i, i + chunkSize);
@@ -101,9 +100,9 @@ async function pullFromTurso() {
 }
 
 /**
- * Pushes critical local SQLite tables to Turso Cloud
+ * Pushes specific local SQLite tables to Turso Cloud
  */
-async function syncToTurso() {
+async function syncTablesToTurso(tables = SYNC_TABLES) {
   if (!isTursoConfigured()) return { success: false, reason: 'Turso not configured' };
   const client = getTursoClient();
   if (!client) return { success: false, reason: 'Turso client unavailable' };
@@ -114,7 +113,7 @@ async function syncToTurso() {
     await client.execute('PRAGMA foreign_keys = OFF;');
     let syncedCount = 0;
 
-    for (const table of SYNC_TABLES) {
+    for (const table of tables) {
       try {
         const [rows] = await sequelize.query(`SELECT * FROM ${table};`);
         if (!rows || rows.length === 0) continue;
@@ -144,12 +143,55 @@ async function syncToTurso() {
       }
     }
     await client.execute('PRAGMA foreign_keys = ON;').catch(() => {});
-    console.log(`☁️ [TursoSync] Pushed ${syncedCount} records to Turso Cloud successfully.`);
     return { success: true, syncedCount };
   } catch (err) {
     console.error('⚠️ [TursoSync] Push error:', err.message);
     return { success: false, error: err.message };
   }
+}
+
+/**
+ * Pushes all critical tables to Turso Cloud
+ */
+async function syncToTurso() {
+  const result = await syncTablesToTurso(SYNC_TABLES);
+  if (result.success) {
+    console.log(`☁️ [TursoSync] Pushed ${result.syncedCount} records to Turso Cloud successfully.`);
+  }
+  return result;
+}
+
+// ─── Real-Time Debounced Sync on User Request ─────────────────────────────
+let instantSyncDebounce = null;
+const pendingTables = new Set();
+
+/**
+ * Call this on any important mutation (signup, team create, deposit, etc.)
+ * Syncs the changed tables to Turso Cloud within 800ms!
+ */
+function triggerInstantSync(tables = []) {
+  if (!isTursoConfigured()) return;
+
+  if (Array.isArray(tables)) {
+    tables.forEach(t => pendingTables.add(t));
+  } else if (typeof tables === 'string') {
+    pendingTables.add(tables);
+  }
+
+  if (instantSyncDebounce) return;
+  instantSyncDebounce = setTimeout(async () => {
+    instantSyncDebounce = null;
+    const targetTables = pendingTables.size > 0 ? Array.from(pendingTables) : SYNC_TABLES;
+    pendingTables.clear();
+    try {
+      const res = await syncTablesToTurso(targetTables);
+      if (res.success && res.syncedCount > 0) {
+        console.log(`⚡ [TursoSync:Instant] Real-time synced ${res.syncedCount} rows (${targetTables.join(', ')}) to Turso Cloud!`);
+      }
+    } catch (err) {
+      console.warn('⚠️ [TursoSync:Instant] Sync notice:', err.message);
+    }
+  }, 800);
 }
 
 /**
@@ -211,5 +253,7 @@ module.exports = {
   getTursoClient,
   initTursoSync,
   syncToTurso,
+  syncTablesToTurso,
   pullFromTurso,
+  triggerInstantSync,
 };

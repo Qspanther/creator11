@@ -203,7 +203,7 @@ app.use((err, req, res, next) => {
 async function start() {
   try {
     // Sync database
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
 
     // Initialize Turso Cloud Sync
     const { initTursoSync } = require('./services/tursoSyncService');

@@ -214,7 +214,7 @@ router.post('/signup', async (req, res) => {
     });
   } catch (error) {
     console.error('Signup error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', message: error.message, stack: process.env.NODE_ENV === 'production' ? undefined : error.stack });
   }
 });
 
@@ -266,7 +266,7 @@ router.post('/verify-otp', async (req, res) => {
     });
   } catch (error) {
     console.error('OTP verification error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 });
 
@@ -362,7 +362,7 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 });
 

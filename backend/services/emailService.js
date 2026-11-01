@@ -127,7 +127,7 @@ async function tryGoogleScript({ toEmail, subject, text, html }) {
 
 // ─── Channel 3: Brevo HTTPS API (Port 443 — Works 100% on Render) ──────────
 async function tryBrevo({ toEmail, subject, text, html }) {
-  const apiKey = process.env.BREVO_API_KEY;
+  const apiKey = (process.env.BREVO_API_KEY || '').trim();
   if (!apiKey) return null;
 
   try {
@@ -137,20 +137,21 @@ async function tryBrevo({ toEmail, subject, text, html }) {
         headers: {
           'api-key': apiKey,
           'Content-Type': 'application/json',
+          'accept': 'application/json',
         },
         body: JSON.stringify({
-          sender: { name: 'Creator11', email: mailUser },
+          sender: { name: 'Creator11', email: mailUser || 'qspanther@gmail.com' },
           to: [{ email: toEmail }],
           subject,
           htmlContent: html,
           textContent: text,
         }),
       }),
-      4000,
+      7000,
       'calling Brevo API'
     );
     const data = await res.json();
-    if (res.ok) {
+    if (res.ok && data.messageId) {
       console.log(`✅ [EmailService:Brevo-HTTPS] Email delivered to ${toEmail} (ID: ${data.messageId})`);
       return { success: true, messageId: data.messageId, provider: 'brevo-https' };
     } else {

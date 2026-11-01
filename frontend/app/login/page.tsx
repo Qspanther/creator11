@@ -22,12 +22,7 @@ export default function LoginPage() {
     try {
       const data = await apiPost('/auth/login', form);
 
-      if (data.requiresOtp) {
-        sessionStorage.setItem('otp_email', form.email);
-        sessionStorage.setItem('mock_otp', data.mockOtp);
-        router.push('/verify-otp');
-        return;
-      }
+
 
       login(data.token, data.user);
       router.push('/dashboard');

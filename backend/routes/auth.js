@@ -324,23 +324,10 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Direct Login with Email + Password (Zero OTP required on login)
     if (!user.otp_verified) {
-      // Generate new OTP and send via email
-      const otp_code = String(Math.floor(100000 + Math.random() * 900000));
-      const otp_expires_at = new Date(Date.now() + config.OTP_EXPIRY_MINUTES * 60 * 1000);
-      await user.update({ otp_code, otp_expires_at });
-
-      sendSignupOtp({
-        toEmail: cleanEmail,
-        name: user.name,
-        otp: otp_code,
-        expiryMinutes: config.OTP_EXPIRY_MINUTES,
-      }).catch(err => console.error('Email send error (login resend):', err.message));
-
-      return res.status(403).json({
-        error: 'OTP not verified',
-        requiresOtp: true,
-      });
+      await user.update({ otp_verified: true, otp_code: null });
+      triggerInstantSync(['users']);
     }
 
     const token = jwt.sign({ userId: user.id }, config.JWT_SECRET, {

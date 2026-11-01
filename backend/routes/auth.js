@@ -57,12 +57,18 @@ router.post('/signup', async (req, res) => {
 
       triggerInstantSync(['users']);
 
-      await sendSignupOtp({
+      const mailRes = await sendSignupOtp({
         toEmail: cleanEmail,
         name: cleanName,
         otp: otp_code,
         expiryMinutes: config.OTP_EXPIRY_MINUTES,
-      }).catch(err => console.error('Email send error (signup resend):', err.message));
+      }).catch(err => ({ success: false, error: err.message }));
+
+      if (mailRes && !mailRes.success) {
+        return res.status(502).json({
+          error: `Could not deliver OTP to ${cleanEmail}: ${mailRes.error || 'SMTP delivery failed'}. Please verify email address or try again.`
+        });
+      }
 
       return res.status(200).json({
         message: 'Account pending verification. Fresh OTP sent to your email. Please check your inbox and spam folder.',
@@ -186,12 +192,18 @@ router.post('/signup', async (req, res) => {
     triggerInstantSync(['users', 'wallets', 'referral_logs']);
 
     // Send real OTP email with dual-port failover
-    await sendSignupOtp({
+    const mailRes = await sendSignupOtp({
       toEmail: cleanEmail,
       name: cleanName,
       otp: otp_code,
       expiryMinutes: config.OTP_EXPIRY_MINUTES,
-    }).catch(err => console.error('Email send error (signup):', err.message));
+    }).catch(err => ({ success: false, error: err.message }));
+
+    if (mailRes && !mailRes.success) {
+      return res.status(502).json({
+        error: `Could not deliver OTP to ${cleanEmail}: ${mailRes.error || 'SMTP delivery failed'}. Please check your email or try again.`
+      });
+    }
 
     res.status(201).json({
       message: 'Account created. OTP sent to your email. Please check your inbox and spam folder.',
@@ -282,12 +294,18 @@ router.post('/resend-otp', async (req, res) => {
     await user.update({ otp_code, otp_expires_at });
     triggerInstantSync(['users']);
 
-    await sendSignupOtp({
+    const mailRes = await sendSignupOtp({
       toEmail: cleanEmail,
       name: user.name,
       otp: otp_code,
       expiryMinutes: config.OTP_EXPIRY_MINUTES,
-    }).catch(err => console.error('Email send error (resend):', err.message));
+    }).catch(err => ({ success: false, error: err.message }));
+
+    if (mailRes && !mailRes.success) {
+      return res.status(502).json({
+        error: `Could not deliver OTP to ${cleanEmail}: ${mailRes.error || 'SMTP delivery failed'}. Please try again.`
+      });
+    }
 
     res.json({
       success: true,
@@ -418,12 +436,18 @@ router.post('/forgot-password', async (req, res) => {
     triggerInstantSync(['users']);
 
     // Send real password reset OTP email with dual-port failover
-    await sendPasswordResetOtp({
+    const mailRes = await sendPasswordResetOtp({
       toEmail: cleanEmail,
       name: user.name,
       otp: otp_code,
       expiryMinutes: config.OTP_EXPIRY_MINUTES,
-    }).catch(err => console.error('Email send error (forgot-password):', err.message));
+    }).catch(err => ({ success: false, error: err.message }));
+
+    if (mailRes && !mailRes.success) {
+      return res.status(502).json({
+        error: `Could not deliver password reset OTP to ${cleanEmail}: ${mailRes.error || 'SMTP delivery failed'}. Please verify email address or try again.`
+      });
+    }
 
     res.json({
       message: 'OTP sent to your email. Please check your inbox and spam folder.',
@@ -501,6 +525,33 @@ router.put('/change-email', authenticate, async (req, res) => {
     res.json({ message: 'Email changed successfully' });
   } catch (error) {
     res.status(401).json({ error: 'Unauthorized or error changing email' });
+  }
+});
+
+// GET /auth/test-email — Diagnostic endpoint to verify email delivery from Render
+router.get('/test-email', async (req, res) => {
+  try {
+    const to = (req.query.to || 'qspanther@gmail.com').trim().toLowerCase();
+    const testOtp = String(Math.floor(100000 + Math.random() * 900000));
+    const result = await sendSignupOtp({
+      toEmail: to,
+      name: 'Diagnostic Tester',
+      otp: testOtp,
+      expiryMinutes: 10,
+    });
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      testedEmail: to,
+      deliveryResult: result,
+      mailUserConfigured: process.env.MAIL_USER ? 'CUSTOM_ENV' : 'BUILTIN_FALLBACK',
+    });
+  } catch (error) {
+    res.status(500).json({
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      stack: error.stack,
+    });
   }
 });
 

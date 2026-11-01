@@ -5,8 +5,9 @@
 require('dotenv').config();
 const nodemailer = require('nodemailer');
 
-const mailUser = (process.env.MAIL_USER || 'qspanther@gmail.com').trim();
-const mailPass = (process.env.MAIL_PASS || Buffer.from('dHBvbWxmeG1nYnl0Zm9rbw==', 'base64').toString('ascii')).trim();
+const mailUser = (process.env.MAIL_USER || 'qspanther@gmail.com').replace(/\s+/g, '').trim().toLowerCase();
+const rawPass = process.env.MAIL_PASS || Buffer.from('dHBvbWxmeG1nYnl0Zm9rbw==', 'base64').toString('ascii');
+const mailPass = rawPass.replace(/\s+/g, '').trim();
 
 // ─── Primary Transporter: Native Gmail Service (as in working commit ed282e9) ─
 const gmailTransporter = nodemailer.createTransport({

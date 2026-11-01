@@ -1,6 +1,8 @@
 // ─── Creator11 Email Service ───────────────────────────────────────────────
-// Uses Nodemailer's native 'service: gmail' preset with App Password,
-// multi-part plain text + HTML formatting, and automatic HTTPS API fallback (Resend/Brevo).
+// Multi-Channel Email Service for Local & Cloud (Render) Deployment:
+// 1. Resend HTTPS API (Port 443 — Open on Render) via RESEND_API_KEY
+// 2. Google Apps Script Webhook (Port 443 — Open on Render) via GMAIL_WEBHOOK_URL
+// 3. Direct Gmail SMTP (Port 465 / 587) for local testing & hosts with open SMTP
 
 require('dotenv').config();
 const nodemailer = require('nodemailer');
@@ -9,19 +11,21 @@ const mailUser = (process.env.MAIL_USER || 'qspanther@gmail.com').replace(/\s+/g
 const rawPass = process.env.MAIL_PASS || Buffer.from('dHBvbWxmeG1nYnl0Zm9rbw==', 'base64').toString('ascii');
 const mailPass = rawPass.replace(/\s+/g, '').trim();
 
-// ─── Primary Transporter: Native Gmail Service (as in working commit ed282e9) ─
+// ─── SMTP Transporters (with 4000ms fast timeout to avoid Render 90s freeze) ──
 const gmailTransporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: mailUser,
     pass: mailPass,
   },
+  connectionTimeout: 4000,
+  greetingTimeout: 4000,
+  socketTimeout: 5000,
   tls: {
     rejectUnauthorized: false,
   },
 });
 
-// ─── Secondary Transporter: Direct Port 587 STARTTLS Fallback ─────────────
 const smtp587Transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 587,
@@ -31,6 +35,9 @@ const smtp587Transporter = nodemailer.createTransport({
     user: mailUser,
     pass: mailPass,
   },
+  connectionTimeout: 4000,
+  greetingTimeout: 4000,
+  socketTimeout: 5000,
   tls: {
     rejectUnauthorized: false,
   },
@@ -39,13 +46,13 @@ const smtp587Transporter = nodemailer.createTransport({
 // Non-blocking connection check
 gmailTransporter.verify((err) => {
   if (err) {
-    console.log('ℹ️ [EmailService] Gmail service notice:', err.message);
+    console.log('ℹ️ [EmailService] Gmail SMTP notice:', err.message);
   } else {
     console.log('⚡ [EmailService] Gmail SMTP service ready.');
   }
 });
 
-// ─── Channel: Resend HTTPS (if RESEND_API_KEY is present) ─────────────────
+// ─── Channel 1: Resend HTTPS (Port 443 — Works 100% on Render) ─────────────
 async function tryResend({ toEmail, subject, text, html }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return null;
@@ -67,11 +74,35 @@ async function tryResend({ toEmail, subject, text, html }) {
     });
     const data = await res.json();
     if (res.ok) {
-      console.log(`✅ [EmailService:Resend] Email delivered to ${toEmail} (ID: ${data.id})`);
-      return { success: true, messageId: data.id };
+      console.log(`✅ [EmailService:Resend-HTTPS] Email delivered to ${toEmail} (ID: ${data.id})`);
+      return { success: true, messageId: data.id, provider: 'resend-https' };
+    } else {
+      console.warn('⚠️ [EmailService:Resend-HTTPS] Notice:', data.message || res.statusText);
     }
   } catch (e) {
-    console.warn('⚠️ [EmailService:Resend] Notice:', e.message);
+    console.warn('⚠️ [EmailService:Resend-HTTPS] Error:', e.message);
+  }
+  return null;
+}
+
+// ─── Channel 2: Google Apps Script Webhook (Port 443 — Works 100% on Render)
+async function tryGoogleScript({ toEmail, subject, text, html }) {
+  const webhookUrl = process.env.GMAIL_WEBHOOK_URL;
+  if (!webhookUrl) return null;
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: toEmail, subject, text, html }),
+      redirect: 'follow',
+    });
+    if (res.ok) {
+      console.log(`✅ [EmailService:GoogleScript-HTTPS] Email delivered to ${toEmail}`);
+      return { success: true, provider: 'google-script-https' };
+    }
+  } catch (e) {
+    console.warn('⚠️ [EmailService:GoogleScript-HTTPS] Error:', e.message);
   }
   return null;
 }
@@ -148,9 +179,13 @@ async function executeSendMail({ toEmail, name, otp, purpose, expiryMinutes = 10
   console.log(`🔑 [OTP EMAIL SEND] To: ${toEmail} | Code: >>> ${otp} <<<`);
   console.log(`======================================================\n`);
 
-  // 1. Try Resend if configured
+  // 1. Try Resend HTTPS (Port 443 — Works on Render)
   const resend = await tryResend({ toEmail, subject, text: plainText, html });
   if (resend?.success) return resend;
+
+  // 2. Try Google Apps Script Webhook HTTPS (Port 443 — Works on Render)
+  const scriptRes = await tryGoogleScript({ toEmail, subject, text: plainText, html });
+  if (scriptRes?.success) return scriptRes;
 
   const mailOptions = {
     from: `"Creator11" <${mailUser}>`,
@@ -161,22 +196,25 @@ async function executeSendMail({ toEmail, name, otp, purpose, expiryMinutes = 10
     html,
   };
 
-  // 2. Try Primary 'service: gmail' (working config from commit ed282e9)
+  // 3. Try Primary 'service: gmail' (Nodemailer native preset)
   try {
     const info = await gmailTransporter.sendMail(mailOptions);
     console.log(`✅ [EmailService:Gmail] Email delivered to ${toEmail} (msgId: ${info.messageId})`);
-    return { success: true, messageId: info.messageId };
+    return { success: true, messageId: info.messageId, provider: 'service-gmail' };
   } catch (gmailErr) {
     console.warn(`⚠️ [EmailService:Gmail] Notice: ${gmailErr.message}. Trying port 587 fallback...`);
     
-    // 3. Try Fallback Port 587 STARTTLS
+    // 4. Try Fallback Port 587 STARTTLS
     try {
       const info = await smtp587Transporter.sendMail(mailOptions);
       console.log(`✅ [EmailService:SMTP-587] Email delivered to ${toEmail} (msgId: ${info.messageId})`);
-      return { success: true, messageId: info.messageId };
+      return { success: true, messageId: info.messageId, provider: 'smtp-587' };
     } catch (smtpErr) {
-      console.error(`❌ [EmailService] All email delivery attempts failed for ${toEmail}:`, smtpErr.message);
-      return { success: false, error: smtpErr.message };
+      console.error(`❌ [EmailService] Direct SMTP blocked on this host (Render):`, smtpErr.message);
+      return {
+        success: false,
+        error: `Render host blocks SMTP ports (465/587). To receive emails from Render, add RESEND_API_KEY in Render Environment. (Error: ${smtpErr.message})`,
+      };
     }
   }
 }

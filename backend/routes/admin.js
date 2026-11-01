@@ -180,6 +180,23 @@ router.get('/tournaments', async (req, res) => {
 // In-flight creation locks to prevent multiple leagues being created by rapid clicks / parallel requests
 const activeCreationLocks = new Set();
 
+
+// POST /admin/turso/sync — Push all active database records to Turso Cloud Database
+router.post('/turso/sync', async (req, res) => {
+  try {
+    const { isTursoConfigured, syncToTurso } = require('../services/tursoSyncService');
+    if (!isTursoConfigured()) {
+      return res.status(400).json({ 
+        error: 'Turso Cloud is not configured. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in Render environment.' 
+      });
+    }
+    await syncToTurso();
+    res.json({ success: true, message: 'All database records successfully synced to Turso Cloud!' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to sync with Turso: ' + err.message });
+  }
+});
+
 router.post('/tournaments', async (req, res) => {
   const cleanName = String(req.body.name || '').trim();
   if (!cleanName) {

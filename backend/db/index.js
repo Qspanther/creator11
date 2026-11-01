@@ -1,27 +1,45 @@
 const { Sequelize } = require('sequelize');
 const config = require('../config');
 
-const sequelize = new Sequelize({
-  dialect: config.DB_DIALECT,
-  storage: config.DB_STORAGE,
-  logging: false,
-  dialectOptions: {
-    busyTimeout: 30000,
-  },
-  pool: {
-    max: 10,
-    min: 2,
-    acquire: 30000,
-    idle: 10000,
-  },
-  retry: {
-    max: 5,
-  },
-  define: {
-    timestamps: true,
-    underscored: true,
-  },
-});
+let sequelize;
+
+const isPostgres = process.env.DATABASE_URL && 
+  (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'));
+
+if (isPostgres) {
+  sequelize = new Sequelize(process.env.DATABASE_URL, {
+    dialect: 'postgres',
+    dialectOptions: {
+      ssl: process.env.DB_SSL === 'false' ? false : { require: true, rejectUnauthorized: false },
+    },
+    logging: false,
+    pool: { max: 10, min: 2, acquire: 30000, idle: 10000 },
+    define: { timestamps: true, underscored: true },
+  });
+  console.log('🐘 Cloud PostgreSQL engine active via DATABASE_URL');
+} else {
+  sequelize = new Sequelize({
+    dialect: config.DB_DIALECT,
+    storage: config.DB_STORAGE,
+    logging: false,
+    dialectOptions: {
+      busyTimeout: 30000,
+    },
+    pool: {
+      max: 10,
+      min: 2,
+      acquire: 30000,
+      idle: 10000,
+    },
+    retry: {
+      max: 5,
+    },
+    define: {
+      timestamps: true,
+      underscored: true,
+    },
+  });
+}
 
 // Configure WAL mode, synchronous, memory cache, and high-performance indexes
 sequelize.authenticate().then(async () => {

@@ -69,11 +69,11 @@ function startScheduler() {
         console.log(`🔒 Tournament locked and bots registered: ${t.name}`);
       }
 
-      // 2. Start tournaments and take start snapshots
+      // 2. Start tournaments and take start snapshots (only if already locked by lock_time)
       const toStart = await Tournament.findAll({
         where: {
-          status: { [Op.in]: ['upcoming', 'locked'] },
-          start_time: { [Op.lte]: now },
+          status: 'locked',
+          start_time: { [Op.ne]: null, [Op.lte]: now },
           end_time: { [Op.gt]: now },
         },
       });

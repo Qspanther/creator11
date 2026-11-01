@@ -204,14 +204,6 @@ async function start() {
     if (creatorCount === 0) {
       console.log('🌱 No creators found, running seed...');
       await seed();
-    } else {
-      const { Tournament } = require('./db/models');
-      const tCount = await Tournament.count();
-      if (tCount === 0) {
-        console.log('🏆 No tournaments found, seeding default battle cups...');
-        const { seedTournaments } = require('./db/seed');
-        if (typeof seedTournaments === 'function') await seedTournaments();
-      }
     }
 
     // Start the scheduler

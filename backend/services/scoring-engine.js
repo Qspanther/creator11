@@ -464,7 +464,7 @@ async function getTeamScorecard(teamId) {
         include: [{ model: Creator, as: 'creator' }],
       },
       { model: Tournament, as: 'Tournament' },
-      { model: User, as: 'User', attributes: ['id', 'name', 'email'] },
+      { model: User, as: 'user', attributes: ['id', 'name', 'email'] },
     ],
   });
 

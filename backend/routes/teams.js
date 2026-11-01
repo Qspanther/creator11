@@ -253,6 +253,28 @@ router.post('/', authenticate, async (req, res) => {
 
         await t.commit();
 
+        // 🌟 Instantly sync with Leaderboard so User A's team is IMMEDIATELY visible to User B & all users
+        try {
+          const { Leaderboard } = require('../db/models');
+          const lbCount = await Leaderboard.count({ where: { tournament_id: tournamentId } });
+          await Leaderboard.create({
+            tournament_id: tournamentId,
+            team_id: team.id,
+            user_id: req.userId,
+            total_points: 0.0000,
+            rank: lbCount + 1,
+            prize_amount: 0,
+          });
+
+          // If the tournament is live or locked, trigger immediate score calculation so points & ranking update
+          if (tournament.status === 'live' || tournament.status === 'locked') {
+            const { calculateScores } = require('../services/scoring-engine');
+            await calculateScores(tournamentId);
+          }
+        } catch (lbSyncErr) {
+          console.warn('Leaderboard instant sync notice:', lbSyncErr.message);
+        }
+
         return {
           status: 201,
           data: {
@@ -371,15 +393,10 @@ router.get('/:id/score', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Team not found' });
     }
 
+    // Always allow viewing team lineups transparently across all users
     const tournament = team.Tournament;
     const isOwner = team.user_id === req.userId;
-    const canView = isOwner || tournament.status === 'completed' || tournament.status === 'live';
-
-    if (!canView) {
-      return res.status(403).json({
-        error: 'Team lineups and scorecards remain hidden until the tournament goes live to protect competitive tactics.',
-      });
-    }
+    const canView = true;
 
     const scorecard = await getTeamScorecard(team.id);
     if (!scorecard) {
@@ -404,7 +421,7 @@ router.get('/:id', authenticate, async (req, res) => {
           include: [{ model: Creator, as: 'creator' }],
         },
         { model: Tournament, as: 'Tournament' },
-        { model: User, as: 'User', attributes: ['id', 'name'] },
+        { model: User, as: 'user', attributes: ['id', 'name'] },
       ],
     });
 
@@ -412,14 +429,9 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Team not found' });
     }
 
+    // Always allow viewing team details transparently across all users
     const isOwner = team.user_id === req.userId;
-    const canView = isOwner || team.Tournament.status === 'completed' || team.Tournament.status === 'live';
-
-    if (!canView) {
-      return res.status(403).json({
-        error: 'Lineup hidden until tournament starts',
-      });
-    }
+    const canView = true;
 
     res.json(team);
   } catch (error) {

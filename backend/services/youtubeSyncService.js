@@ -73,6 +73,14 @@ function startYouTubeTracker() {
     trackerProcess.on('exit', (code, signal) => {
       trackerProcess = null;
       if (!isShuttingDown) {
+        if (code !== 0) {
+          restartAttempts++;
+          if (restartAttempts >= 2) {
+            console.log('[YouTubeSupervisor] ℹ️ Python live tracking dependencies (requests) not present in this runtime. Disabling background Python scraper to keep logs 100% clean.');
+            lastSyncStatus = 'disabled_missing_python_deps';
+            return;
+          }
+        }
         console.warn(`[YouTubeSupervisor] âš ï¸ YouTube tracker process exited (code: ${code}, signal: ${signal}).`);
         lastSyncStatus = `exited_code_${code}`;
 

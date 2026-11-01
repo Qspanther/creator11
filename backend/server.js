@@ -14,6 +14,9 @@ const { authenticate, isAdmin } = require('./middleware/auth');
 
 const app = express();
 
+// Trust proxy for Render / Cloudflare reverse proxy headers
+app.set('trust proxy', 1);
+
 // Global crash guards
 process.on('uncaughtException', (err) => {
   console.error('🛡️ [Server Guard] Uncaught Exception intercepted:', err.message);
@@ -34,6 +37,7 @@ const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 600, // 600 requests per 15 minutes per IP
   standardHeaders: true,
+  validate: { xForwardedForHeader: false },
   legacyHeaders: false,
   message: { error: 'Too many requests from this IP, please try again after 15 minutes.' },
 });
@@ -46,8 +50,9 @@ app.use('/leaderboard', globalLimiter);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30, // Max 30 attempts per 15 minutes per IP
+  max: 60, // Max 60 attempts per 15 minutes per IP
   standardHeaders: true,
+  validate: { xForwardedForHeader: false },
   legacyHeaders: false,
   message: { error: 'Too many authentication attempts, please try again in 15 minutes.' },
 });

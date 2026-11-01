@@ -4,19 +4,19 @@ const { authenticate } = require('../middleware/auth');
 const { Wallet, Transaction } = require('../db/models');
 const sequelize = require('../db/index');
 
-// Ensure user_streaks table exists in SQLite
+// Ensure user_streaks table exists in PostgreSQL / SQLite
 let streaksTableReady = false;
 async function initStreaksTable() {
   if (streaksTableReady) return;
   try {
     await sequelize.query(`
       CREATE TABLE IF NOT EXISTS user_streaks (
-        user_id TEXT PRIMARY KEY,
+        user_id VARCHAR(255) PRIMARY KEY,
         streak_count INTEGER DEFAULT 1,
-        last_claim_date TEXT,
+        last_claim_date VARCHAR(50),
         total_claims INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     streaksTableReady = true;

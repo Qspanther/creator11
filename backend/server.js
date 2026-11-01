@@ -199,6 +199,10 @@ async function start() {
   try {
     // Sync database
     await sequelize.sync();
+
+    // Initialize Turso Cloud Sync
+    const { initTursoSync } = require('./services/tursoSyncService');
+    await initTursoSync();
     console.log('ðŸ“¦ Database synced');
 
     // Check if we need to seed

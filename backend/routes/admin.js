@@ -181,7 +181,36 @@ router.get('/tournaments', async (req, res) => {
 const activeCreationLocks = new Set();
 
 
-// POST /admin/turso/sync — Push all active database records to Turso Cloud Database
+// Turso Cloud Sync Endpoints
+router.get('/turso/status', async (req, res) => {
+  try {
+    const { isTursoConfigured, getTursoClient } = require('../services/tursoSyncService');
+    const configured = isTursoConfigured();
+    let cloudUsers = 0;
+    let cloudOnline = false;
+
+    if (configured) {
+      try {
+        const client = getTursoClient();
+        const check = await client.execute('SELECT COUNT(*) as count FROM users;');
+        cloudUsers = check.rows[0]?.count || 0;
+        cloudOnline = true;
+      } catch (e) {
+        cloudOnline = false;
+      }
+    }
+
+    res.json({
+      configured,
+      cloudOnline,
+      cloudUsers,
+      databaseUrl: process.env.TURSO_DATABASE_URL ? process.env.TURSO_DATABASE_URL.replace(/:[^:]*@/, ':***@') : null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/turso/sync', async (req, res) => {
   try {
     const { isTursoConfigured, syncToTurso } = require('../services/tursoSyncService');
@@ -190,10 +219,25 @@ router.post('/turso/sync', async (req, res) => {
         error: 'Turso Cloud is not configured. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in Render environment.' 
       });
     }
-    await syncToTurso();
-    res.json({ success: true, message: 'All database records successfully synced to Turso Cloud!' });
+    const result = await syncToTurso();
+    res.json({ success: true, message: 'All database records successfully synced to Turso Cloud!', ...result });
   } catch (err) {
     res.status(500).json({ error: 'Failed to sync with Turso: ' + err.message });
+  }
+});
+
+router.post('/turso/pull', async (req, res) => {
+  try {
+    const { isTursoConfigured, pullFromTurso } = require('../services/tursoSyncService');
+    if (!isTursoConfigured()) {
+      return res.status(400).json({ 
+        error: 'Turso Cloud is not configured. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in Render environment.' 
+      });
+    }
+    const result = await pullFromTurso();
+    res.json({ success: true, message: 'Latest database records pulled from Turso Cloud!', ...result });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to pull from Turso: ' + err.message });
   }
 });
 

@@ -77,23 +77,26 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
     let formattedEntries = [];
     const teamIdsInFormatted = new Set();
 
+    // Official rankings are ONLY revealed when contest is completed AND bot manager finalized rankings
+    const isRankingsFinalized = tournament.status === 'completed' && Boolean(tournament.rankings_finalized);
+
     // 3. Map computed Leaderboard entries first
     if (entries.length > 0) {
       entries.forEach(e => {
         teamIdsInFormatted.add(e.team_id);
-        const prizeAmt = parseFloat(e.prize_amount || 0);
+        const prizeAmt = isRankingsFinalized ? parseFloat(e.prize_amount || 0) : 0;
         const isRefund = prizeAmt < 100;
         formattedEntries.push({
-          rank: e.rank,
+          rank: isRankingsFinalized ? e.rank : null,
           teamId: e.team_id,
           userId: e.user_id,
           userName: e.user ? e.user.name : 'Competitor',
           userEmail: e.user_id === req.userId ? (e.user ? e.user.email : '') : undefined,
           totalPoints: parseFloat(e.total_points || 0),
           prizeAmount: prizeAmt,
-          refundAmount: isRefund ? (prizeAmt > 0 ? prizeAmt : standardRefund) : 0,
-          isRefund,
-          platformFee: isRefund ? 2 : 0,
+          refundAmount: isRankingsFinalized ? (isRefund ? (prizeAmt > 0 ? prizeAmt : standardRefund) : 0) : 0,
+          isRefund: isRankingsFinalized ? isRefund : false,
+          platformFee: isRankingsFinalized && isRefund ? 2 : 0,
           isCurrentUser: e.user_id === req.userId,
           canViewTeam: true,
           status: tournament.status,
@@ -107,14 +110,14 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
       teamIdsInFormatted.add(t.id);
       const isCurrent = t.user_id === req.userId;
       formattedEntries.push({
-        rank: formattedEntries.length + 1,
+        rank: isRankingsFinalized ? formattedEntries.length + 1 : null,
         teamId: t.id,
         userId: t.user_id,
         userName: t.user ? t.user.name : (t.user_id ? 'Player ' + t.user_id.slice(0, 5) : 'Competitor'),
         userEmail: isCurrent ? (t.user ? t.user.email : '') : undefined,
         totalPoints: 0.0000,
         prizeAmount: 0,
-        refundAmount: standardRefund,
+        refundAmount: 0,
         isRefund: false,
         platformFee: 0,
         isCurrentUser: isCurrent,
@@ -123,16 +126,16 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
       });
     });
 
-    // 5. Accurate user rank and points calculation
+    // 5. Accurate user rank and points calculation (rank hidden during live match)
     let userRank = null;
     let userPoints = null;
     let userPrize = null;
 
     const myEntry = formattedEntries.find(e => e.userId === req.userId);
     if (myEntry) {
-      userRank = myEntry.rank;
+      userRank = isRankingsFinalized ? myEntry.rank : null;
       userPoints = myEntry.totalPoints;
-      userPrize = myEntry.prizeAmount;
+      userPrize = isRankingsFinalized ? myEntry.prizeAmount : null;
     }
 
     const totalRegisteredCount = await Team.count({ where: { tournament_id: tournamentId } });
@@ -153,7 +156,7 @@ router.get('/:tournamentId', authenticate, async (req, res) => {
         prizePool: parseFloat(tournament.prize_pool) || 0,
         entryFee: entryFee,
         currentParticipants: currentParticipants,
-        rankingsFinalized: tournament.rankings_finalized !== false && tournament.rankings_finalized !== 0,
+        rankingsFinalized: isRankingsFinalized,
       },
       canViewTeams,
       entries: formattedEntries,

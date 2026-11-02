@@ -203,7 +203,12 @@ app.use((err, req, res, next) => {
 async function start() {
   try {
     // Sync database
-    await sequelize.sync({ alter: true });
+    const isPg = process.env.DATABASE_URL && (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'));
+    if (isPg) {
+      await sequelize.sync();
+    } else {
+      await sequelize.sync({ alter: true });
+    }
 
     // Initialize Turso Cloud Sync
     const { initTursoSync } = require('./services/tursoSyncService');

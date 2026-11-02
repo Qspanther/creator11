@@ -141,8 +141,8 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
     return () => clearInterval(interval);
   }, [token, tournamentId]);
 
-  // Determine if official rankings should be displayed
-  const showRankings = tournament?.status === 'completed' && tournament?.rankingsFinalized !== false;
+  // Determine if official rankings should be displayed (ONLY after contest completion & bot rearrangement)
+  const showRankings = tournament?.status === 'completed' && Boolean(tournament?.rankingsFinalized);
 
   const getRankIcon = (rank: number) => {
     if (rank === 1) return <Trophy size={20} className="text-neon-gold drop-shadow-md" />;
@@ -364,11 +364,11 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
                     {showRankings && userRank ? (
                       <h3 className="text-2xl font-black text-white">#{userRank}</h3>
                     ) : (
-                      <h3 className="text-2xl font-black text-white">{userPoints.toFixed(4)} pts</h3>
+                      <h3 className="text-2xl font-black text-white">{userPoints !== null ? userPoints.toFixed(4) : '0.0000'} pts</h3>
                     )}
                     {!showRankings && (
                       <span className="text-[10px] font-bold text-success flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-success animate-ping" /> Live
+                        <span className="w-1.5 h-1.5 rounded-full bg-success animate-ping" /> Live (Rank Hidden)
                       </span>
                     )}
                   </div>
@@ -459,8 +459,8 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
           ) : (
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-text-muted px-3 pb-1">
-                <span>Competitor & Status</span>
-                <span>Points / Inspect</span>
+                <span>{showRankings ? 'Competitor & Final Rank' : 'Competitor (Live Points Mode • Rank Hidden)'}</span>
+                <span>{showRankings ? 'Points / Payout' : 'Live Score & Multipliers'}</span>
               </div>
               {filteredEntries.map((entry, i) => {
                 const isWinner = showRankings && entry.rank === 1;
@@ -491,8 +491,8 @@ export default function LeaderboardPage({ params }: { params: Promise<{ tourname
                           {getRankIcon(entry.rank)}
                         </div>
                       ) : (
-                        <div className="w-7 flex justify-center shrink-0">
-                          <div className="w-2.5 h-2.5 rounded-full bg-success/80 animate-pulse" title="Live Participant" />
+                        <div className="w-7 flex items-center justify-center shrink-0">
+                          <span className="text-[11px] font-mono font-bold text-slate-400"># -</span>
                         </div>
                       )}
 

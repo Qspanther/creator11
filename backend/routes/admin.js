@@ -309,6 +309,7 @@ router.post('/tournaments', async (req, res) => {
       lock_time: lockTime,
       end_time: endTime,
       status: req.body.status || 'upcoming',
+      rankings_finalized: false,
       max_participants: req.body.max_participants || 1100,
     };
     const t = await Tournament.create(data);

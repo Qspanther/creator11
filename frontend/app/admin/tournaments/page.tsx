@@ -112,13 +112,21 @@ export default function AdminTournamentsPage() {
       .finally(() => setLoading(false));
   };
 
+  const toLocalInput = (iso?: string | Date) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
   const handleEdit = (t: Tournament) => {
     setEditingId(t.id);
     setEditForm({
       ...t,
-      start_time: new Date(t.start_time).toISOString().slice(0, 16), // datetime-local format
-      lock_time: new Date(t.lock_time).toISOString().slice(0, 16),
-      end_time: new Date(t.end_time).toISOString().slice(0, 16)
+      start_time: toLocalInput(t.start_time),
+      lock_time: toLocalInput(t.lock_time),
+      end_time: toLocalInput(t.end_time)
     } as any);
   };
 
@@ -129,7 +137,11 @@ export default function AdminTournamentsPage() {
 
   const handleSave = async (id: string) => {
     try {
-      await apiPut(`/admin/tournaments/${id}`, editForm, token);
+      const payload: any = { ...editForm };
+      if (payload.start_time) payload.start_time = new Date(payload.start_time).toISOString();
+      if (payload.lock_time) payload.lock_time = new Date(payload.lock_time).toISOString();
+      if (payload.end_time) payload.end_time = new Date(payload.end_time).toISOString();
+      await apiPut(`/admin/tournaments/${id}`, payload, token);
       setEditingId(null);
       fetchTournaments();
     } catch (err) {
@@ -323,11 +335,33 @@ export default function AdminTournamentsPage() {
                 />
               </div>
 
-              {/* 12-Hour Lock Time */}
+              {/* 12-Hour Start Time (FIRST) */}
               <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2">
                 <DateTimePicker12h
-                  label="1. League Lock Time (Team Editing Closes)"
-                  sublabel="12-Hour AM/PM format"
+                  label="1. League Start Time (Match / Contest Begins & Live Scoring Starts)"
+                  sublabel="12-Hour AM/PM format (Select exact start time, e.g. 11:30 AM)"
+                  value={addForm.start_time}
+                  disabled={isSubmitting}
+                  onChange={(iso) => {
+                    setAddForm(prev => {
+                      // If lock_time is not yet set, default it to 30 mins before new start
+                      const newStart = new Date(iso);
+                      const currentLock = prev.lock_time ? new Date(prev.lock_time) : null;
+                      if (!currentLock || currentLock.getTime() > newStart.getTime()) {
+                        const newLock = new Date(newStart.getTime() - 30 * 60000);
+                        return { ...prev, start_time: iso, lock_time: newLock.toISOString() };
+                      }
+                      return { ...prev, start_time: iso };
+                    });
+                  }}
+                />
+              </div>
+
+              {/* 12-Hour Lock Time (SECOND) */}
+              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2">
+                <DateTimePicker12h
+                  label="2. League Lock Time (Team Editing & New Entries Close)"
+                  sublabel="12-Hour AM/PM format (e.g. 11:00 AM)"
                   value={addForm.lock_time}
                   disabled={isSubmitting}
                   onChange={(iso) => setAddForm(prev => ({ ...prev, lock_time: iso }))}
@@ -356,23 +390,16 @@ export default function AdminTournamentsPage() {
                   >
                     30m Before Start
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddForm(prev => ({ ...prev, lock_time: prev.start_time }));
+                    }}
+                    className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-amber-300 font-medium"
+                  >
+                    Same as Start
+                  </button>
                 </div>
-              </div>
-
-              {/* 12-Hour Start Time */}
-              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2">
-                <DateTimePicker12h
-                  label="2. League Start Time (Contest Begins & Live Tracking Starts)"
-                  sublabel="12-Hour AM/PM format"
-                  value={addForm.start_time}
-                  disabled={isSubmitting}
-                  onChange={(iso) => {
-                    const newStart = new Date(iso);
-                    // auto-adjust lock time to 30 mins before new start if lock was before
-                    const newLock = new Date(newStart.getTime() - 30 * 60000);
-                    setAddForm(prev => ({ ...prev, start_time: iso, lock_time: newLock.toISOString() }));
-                  }}
-                />
               </div>
 
               {/* Duration in Hours (kitne ghante chalegi ye league) */}

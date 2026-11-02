@@ -195,14 +195,30 @@ export default function LandingPage3D() {
           </div>
         ) : (
           <div className="grid md:grid-cols-3 gap-6">
-            {tournaments.map((t) => (
+            {tournaments.map((t) => {
+              const nowMs = Date.now();
+              const startMs = t.start_time ? new Date(t.start_time).getTime() : 0;
+              const lockMs = t.lock_time ? new Date(t.lock_time).getTime() : startMs;
+              const isLive = t.status === 'live' || (startMs > 0 && nowMs >= startMs);
+              const isCompleted = t.status === 'completed';
+              const isLocked = !isCompleted && !isLive && (t.status === 'locked' || (lockMs > 0 && nowMs >= lockMs));
+
+              return (
               <TiltCard3D key={t.id} className="p-6 flex flex-col justify-between space-y-4">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-purple-500/20 text-purple-300 border border-purple-400/30">
                       {t.platform} • {t.duration_type}
                     </span>
-                    <span className="text-xs font-bold text-emerald-400 uppercase">● {t.status}</span>
+                    {isCompleted ? (
+                      <span className="text-xs font-bold text-slate-400 uppercase">● COMPLETED</span>
+                    ) : isLive ? (
+                      <span className="text-xs font-bold text-emerald-400 uppercase animate-pulse">● LIVE</span>
+                    ) : isLocked ? (
+                      <span className="text-xs font-bold text-amber-400 uppercase">🔒 LOCKED</span>
+                    ) : (
+                      <span className="text-xs font-bold text-cyan-400 uppercase">● UPCOMING</span>
+                    )}
                   </div>
                   <h3 className="text-xl font-black text-white">{t.name}</h3>
                   <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-black/45 border border-white/10">
@@ -225,7 +241,8 @@ export default function LandingPage3D() {
                   ⚡ Enter & Draft in 3D Pitch
                 </Link>
               </TiltCard3D>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

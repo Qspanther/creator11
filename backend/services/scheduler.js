@@ -69,16 +69,17 @@ function startScheduler() {
         console.log(`🔒 Tournament locked and bots registered: ${t.name}`);
       }
 
-      // 2. Start tournaments and take start snapshots (only if already locked by lock_time)
+      // 2. Start tournaments: any upcoming or locked tournament that has reached start_time
       const toStart = await Tournament.findAll({
         where: {
-          status: 'locked',
+          status: { [Op.in]: ['upcoming', 'locked'] },
           start_time: { [Op.ne]: null, [Op.lte]: now },
           end_time: { [Op.gt]: now },
         },
       });
-            for (const t of toStart) {
-        await t.update({ status: 'live' });
+      for (const t of toStart) {
+        await t.update({ status: 'live', rankings_finalized: false });
+        await Team.update({ is_locked: true }, { where: { tournament_id: t.id } });
         await takeSnapshot(t.id, 'start');
         try {
           await registerStaggeredBots(t.id);
@@ -111,6 +112,7 @@ function startScheduler() {
         }
 
         await t.update({ status: 'completed', rankings_finalized: true });
+        console.log(`🤖 [BotManager -> Backend] Match contest ended & bot rearrangement complete. Ab sabhi ranks dikha do! Tournament: "${t.name}"`);
         console.log(`🏆 Tournament fully finalized and paid out: ${t.name}`);
       }
 

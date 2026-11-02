@@ -9,27 +9,61 @@ import { playSpatialSFX } from '../components/ui/StageControls3D';
 import { Trophy, Clock, Users, ArrowRight, BarChart3, ShieldCheck } from 'lucide-react';
 import { CardSkeleton } from '../components/ui/Skeleton';
 
-function CountdownTimer({ targetDate }: { targetDate: string }) {
-  const [timeLeft, setTimeLeft] = useState('');
+function MatchCountdownTimer({ lockTime, startTime, status }: { lockTime?: string; startTime: string; status: string }) {
+  const [display, setDisplay] = useState({ label: 'Starts in', time: '' });
 
   useEffect(() => {
     const update = () => {
-      const diff = new Date(targetDate).getTime() - Date.now();
-      if (diff <= 0) {
-        setTimeLeft('Live Now');
+      const now = Date.now();
+      const startMs = new Date(startTime).getTime();
+      const lockMs = lockTime ? new Date(lockTime).getTime() : startMs;
+
+      if (status === 'completed') {
+        setDisplay({ label: 'Status', time: 'Completed' });
         return;
       }
+
+      // Live only when start time has arrived
+      if (status === 'live' || now >= startMs) {
+        setDisplay({ label: 'Status', time: 'Live Now' });
+        return;
+      }
+
+      // If lock time passed, count down until match start!
+      if (now >= lockMs) {
+        const diff = Math.max(0, startMs - now);
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        setDisplay({
+          label: 'Match Starts in',
+          time: `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`,
+        });
+        return;
+      }
+
+      // Before lock time: count down until contest lock
+      const diff = Math.max(0, lockMs - now);
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(`${h}h ${m}m ${s}s`);
+      setDisplay({
+        label: 'Locks in',
+        time: `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`,
+      });
     };
+
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [targetDate]);
+  }, [lockTime, startTime, status]);
 
-  return <span className="font-mono text-cyan-300">{timeLeft}</span>;
+  return (
+    <span className="font-mono text-cyan-300">
+      <span className="text-[11px] text-slate-400 font-sans mr-1">{display.label}:</span>
+      {display.time}
+    </span>
+  );
 }
 
 export default function TournamentsPage3D() {
@@ -50,7 +84,16 @@ export default function TournamentsPage3D() {
 
   const filtered = tournaments.filter((t) => {
     if (statusFilter === 'all') return true;
-    return t.status === statusFilter;
+    const nowMs = Date.now();
+    const startMs = new Date(t.start_time).getTime();
+    const isLive = t.status === 'live' || (nowMs >= startMs && (!t.end_time || nowMs < new Date(t.end_time).getTime()));
+    const isCompleted = t.status === 'completed' || (t.end_time && nowMs >= new Date(t.end_time).getTime());
+    const isUpcoming = !isLive && !isCompleted;
+
+    if (statusFilter === 'upcoming') return isUpcoming;
+    if (statusFilter === 'live') return isLive && !isCompleted;
+    if (statusFilter === 'completed') return isCompleted;
+    return true;
   });
 
   return (
@@ -93,12 +136,14 @@ export default function TournamentsPage3D() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filtered.map((t) => {
-            const isLocked =
-              t.status === 'locked' ||
-              t.status === 'live' ||
-              t.status === 'completed' ||
-              Boolean(t.lock_time && new Date(t.lock_time).getTime() <= Date.now());
+          {filtered.map((t) => {
+            const nowMs = Date.now();
+            const startMs = new Date(t.start_time).getTime();
+            const lockMs = t.lock_time ? new Date(t.lock_time).getTime() : startMs;
+
+            const isCompleted = t.status === 'completed' || (t.end_time && nowMs >= new Date(t.end_time).getTime());
+            const isActuallyLive = !isCompleted && (t.status === 'live' || nowMs >= startMs);
+            const isLocked = !isCompleted && !isActuallyLive && (t.status === 'locked' || nowMs >= lockMs);
 
             return (
               <TiltCard3D key={t.id} className="p-6 flex flex-col justify-between space-y-4 border border-white/10">
@@ -107,21 +152,21 @@ export default function TournamentsPage3D() {
                     <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-red-500/20 text-red-300 border border-red-400/30">
                       {t.platform} • {t.duration_type || '24h'}
                     </span>
-                    {isLocked && t.status === 'upcoming' ? (
+                    {isCompleted ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border bg-slate-500/20 text-slate-300 border-slate-400/40">
+                        ● COMPLETED
+                      </span>
+                    ) : isActuallyLive ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border bg-emerald-500/20 text-emerald-300 border-emerald-400/40 animate-pulse">
+                        ● LIVE
+                      </span>
+                    ) : isLocked ? (
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-400/40 uppercase">
                         🔒 LOCKED
                       </span>
                     ) : (
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                          t.status === 'live'
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
-                            : t.status === 'completed'
-                            ? 'bg-slate-500/20 text-slate-300 border-slate-400/40'
-                            : 'bg-cyan-500/20 text-cyan-300 border-cyan-400/40'
-                        }`}
-                      >
-                        ● {t.status}
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border bg-cyan-500/20 text-cyan-300 border-cyan-400/40">
+                        ● UPCOMING
                       </span>
                     )}
                   </div>
@@ -146,7 +191,7 @@ export default function TournamentsPage3D() {
                   <div className="flex items-center justify-between text-xs text-slate-400">
                     <div className="flex items-center gap-1.5">
                       <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                      {t.lock_time ? <CountdownTimer targetDate={t.lock_time} /> : <span>Lock in 30m</span>}
+                      <MatchCountdownTimer lockTime={t.lock_time} startTime={t.start_time} status={t.status} />
                     </div>
                     <div className="flex items-center gap-1 text-emerald-400 font-semibold">
                       <ShieldCheck className="w-3.5 h-3.5" />
@@ -155,10 +200,18 @@ export default function TournamentsPage3D() {
                   </div>
                 </div>
 
-                                <div className="space-y-2 pt-2">
-                  {isLocked ? (
+                <div className="space-y-2 pt-2">
+                  {isActuallyLive ? (
+                    <Link
+                      href={`/leaderboard/${t.id}`}
+                      onClick={() => playSpatialSFX('power')}
+                      className="w-full py-3 rounded-xl font-extrabold text-xs sm:text-sm text-center bg-gradient-to-r from-emerald-600 to-cyan-500 text-white shadow-lg hover:opacity-95 transition block"
+                    >
+                      🔥 View Live Match & Standings
+                    </Link>
+                  ) : isLocked ? (
                     <div className="w-full py-3 rounded-xl font-extrabold text-xs sm:text-sm text-center bg-white/5 border border-amber-500/30 text-amber-300 flex items-center justify-center gap-2 cursor-not-allowed">
-                      <span>🔒 Contest Locked (Entries Closed)</span>
+                      <span>🔒 Contest Locked (Match Starts Soon)</span>
                     </div>
                   ) : (
                     <Link

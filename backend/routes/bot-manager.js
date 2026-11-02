@@ -746,6 +746,7 @@ async function deployAutonomousBots(tournamentId) {
 
   // Finalize rankings
   await tournament.update({ rankings_finalized: true });
+  console.log(`🤖 [BotManager -> Backend] Match contest ended & bot rearrangement complete. Ab sabhi ranks dikha do! Tournament: "${tournament.name}"`);
 
   // Distribute prizes and ₹97 refunds (₹2 fee)
   try {

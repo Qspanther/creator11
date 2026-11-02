@@ -215,7 +215,7 @@ export default function ScorecardModal({ teamId, isOpen, onClose, team }: Scorec
                 <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-500/15 border border-amber-400/40 text-center">
                   <div className="text-[10px] uppercase font-bold text-amber-200">Contest Rank</div>
                   <div className="text-xl sm:text-2xl font-black text-amber-300 font-mono mt-0.5">
-                    #{data.rank || 1}
+                    {data.tournament?.status === 'completed' && data.rank ? `#${data.rank}` : 'Live (TBD)'}
                   </div>
                 </div>
 

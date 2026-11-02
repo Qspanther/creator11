@@ -10,25 +10,35 @@ import { playSpatialSFX } from '../components/ui/StageControls3D';
 import { Shield, Crown, Star, Trophy, Clock, Edit, BarChart3, Users } from 'lucide-react';
 import { CardSkeleton } from '../components/ui/Skeleton';
 
-function CountdownTimer({ targetDate }: { targetDate: string }) {
+function CountdownTimer({ targetDate, startTime }: { targetDate: string; startTime?: string }) {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
     const update = () => {
-      const diff = new Date(targetDate).getTime() - Date.now();
-      if (diff <= 0) {
-        setTimeLeft('Locked');
-        return;
+      const now = Date.now();
+      const lockMs = new Date(targetDate).getTime();
+      const startMs = startTime ? new Date(startTime).getTime() : lockMs;
+
+      if (now < lockMs) {
+        const diff = lockMs - now;
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        setTimeLeft(`Lock in ${h}h ${m}m ${s}s`);
+      } else if (now < startMs) {
+        const diff = startMs - now;
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        setTimeLeft(`Starts in ${h}h ${m}m ${s}s`);
+      } else {
+        setTimeLeft('Live / Scoring');
       }
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      const s = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(`${h}h ${m}m ${s}s`);
     };
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [targetDate]);
+  }, [targetDate, startTime]);
 
   return <span className="font-mono text-cyan-300">{timeLeft}</span>;
 }
@@ -124,7 +134,7 @@ export default function MyTeamsPage3D() {
                     </span>
                     <div className="text-xs text-slate-400 mt-1">
                       {t.Tournament?.lock_time ? (
-                        <CountdownTimer targetDate={t.Tournament.lock_time} />
+                        <CountdownTimer targetDate={t.Tournament.lock_time} startTime={t.Tournament.start_time} />
                       ) : (
                         <span className="text-slate-400">Active</span>
                       )}
@@ -177,7 +187,7 @@ export default function MyTeamsPage3D() {
                           ...t,
                           Creators: creators,
                           total_score: t.total_score || 0,
-                          rank: t.rank || '-',
+                          rank: t.Tournament?.status === 'completed' && t.Tournament?.rankings_finalized ? t.rank : null,
                         });
                       }}
                       className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-cyan-500 text-white text-xs font-extrabold shadow hover:opacity-90 transition flex items-center gap-1"

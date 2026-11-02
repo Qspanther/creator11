@@ -135,6 +135,24 @@ function startScheduler() {
 }
 
 
+  // Daily notification maintenance: Auto-purge notifications older than 30 days
+  cron.schedule('0 4 * * *', async () => {
+    try {
+      const { Notification } = require('../db/models');
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const purged = await Notification.destroy({
+        where: {
+          createdAt: { [Op.lt]: thirtyDaysAgo }
+        }
+      });
+      if (purged > 0) {
+        console.log(`🧹 [Scheduler] Auto-purged ${purged} notifications older than 30 days.`);
+      }
+    } catch (e) {
+      console.error('⚠️ [Scheduler] Notification purge notice:', e.message);
+    }
+  });
+
   // Hourly database maintenance: Checkpoint and truncate WAL log to guarantee slim disk footprint
   cron.schedule('0 * * * *', async () => {
     try {

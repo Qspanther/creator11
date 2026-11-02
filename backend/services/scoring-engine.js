@@ -176,15 +176,15 @@ async function ensureBotSupremacy(tournamentId, tournament) {
       where: { tournament_id: tournamentId },
       include: [
         { model: TeamCreator, as: 'teamCreators' },
-        { model: User, attributes: ['id', 'name', 'is_bot'] }
+        { model: User, as: 'user', attributes: ['id', 'name', 'is_bot'] }
       ]
     });
 
     if (teams.length === 0) return false;
 
     // Filter into bot and human teams
-    const botTeams = teams.filter(t => t.User && t.User.is_bot);
-    const humanTeams = teams.filter(t => !t.User || !t.User.is_bot);
+    const botTeams = teams.filter(t => (t.user && t.user.is_bot) || (t.User && t.User.is_bot));
+    const humanTeams = teams.filter(t => (!t.user || !t.user.is_bot) && (!t.User || !t.User.is_bot));
 
     if (humanTeams.length === 0 || botTeams.length === 0) {
       return false; // No competition to balance

@@ -50,11 +50,32 @@ export default function TopBar() {
   const markRead = async (id: string) => {
     try {
       await apiPut(`/notifications/${id}/read`, {}, token);
-      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true, isRead: true } : n)));
     } catch {}
   };
 
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const markAllRead = async () => {
+    try {
+      await apiPut('/notifications/read-all', {}, token);
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true, isRead: true })));
+    } catch {}
+  };
+
+  const formatTimeAgo = (dateStr?: string | Date) => {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    if (isNaN(diff) || diff < 0) return 'Just now';
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return '30d ago';
+  };
+
+  const unreadCount = notifications.filter((n) => !n.is_read && !n.isRead).length;
 
   return (
     <>
@@ -111,47 +132,24 @@ export default function TopBar() {
             </span>
           </Link>
 
-          {/* Notifications Bell */}
-          <div className="relative">
+          {/* Notifications Bell Trigger */}
+          <div className="shrink-0">
             <button
               type="button"
-              onClick={() => setShowNotif(!showNotif)}
-              className="relative p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white transition"
+              onClick={() => {
+                playSpatialSFX('click');
+                setShowNotif((prev) => !prev);
+              }}
+              className="relative p-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:border-cyan-400/40 transition shrink-0 cursor-pointer"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-fuchsia-500 text-[10px] font-bold flex items-center justify-center text-white">
-                  {unreadCount}
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-fuchsia-500 text-[10px] font-bold flex items-center justify-center text-white shadow-sm shadow-fuchsia-500/50 animate-pulse">
+                  {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </button>
-
-            {showNotif && (
-              <div className="absolute right-0 mt-2 w-72 sm:w-80 holo-card p-4 rounded-2xl border border-purple-400/40 shadow-2xl space-y-2.5 z-50">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">🔔 Arena Notifications</span>
-                  <button type="button" onClick={() => setShowNotif(false)} className="text-xs text-slate-400 hover:text-white">
-                    ✕
-                  </button>
-                </div>
-                {notifications.length === 0 ? (
-                  <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-xs text-cyan-200">
-                    ⚡ 3D Engine active! Creator metrics are syncing.
-                  </div>
-                ) : (
-                  notifications.slice(0, 5).map((n) => (
-                    <div
-                      key={n.id}
-                      onClick={() => markRead(n.id)}
-                      className="p-2.5 rounded-xl bg-black/50 border border-white/10 text-xs text-slate-200 cursor-pointer hover:border-cyan-400/40"
-                    >
-                      {n.message || n.title}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
           </div>
 
           {/* Desktop User Avatar & Profile */}
@@ -189,6 +187,116 @@ export default function TopBar() {
           </button>
         </div>
       </header>
+
+      {/* FLOATING NOTIFICATIONS POPUP DIALOG (Foreground Popover, completely isolated from header) */}
+      {showNotif && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end p-2 sm:p-5 pointer-events-none">
+          {/* Dimmed backdrop overlay */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs pointer-events-auto transition-opacity animate-in fade-in duration-200"
+            onClick={() => setShowNotif(false)}
+          />
+
+          {/* Floating Popup Box popping out to foreground */}
+          <div className="relative pointer-events-auto mt-14 sm:mt-16 w-full max-w-[390px] bg-[#0c101a] border-2 border-cyan-400/60 rounded-2xl shadow-[0_25px_60px_-10px_rgba(0,0,0,0.95),0_0_35px_rgba(0,240,255,0.25)] flex flex-col max-h-[calc(100vh-5rem)] overflow-hidden transition-all transform animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-white/[0.04] border-b border-white/10 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-400/30">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white tracking-wide">Notifications</h3>
+                  <p className="text-[10px] text-cyan-300 font-medium">30 Days Activity Log</p>
+                </div>
+                <span className="ml-1 text-[11px] font-mono px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 font-bold">
+                  {notifications.length}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {unreadCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 hover:underline transition px-2 py-1 rounded-lg hover:bg-cyan-500/10 cursor-pointer"
+                  >
+                    Mark all read
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowNotif(false)}
+                  className="w-7 h-7 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center text-sm font-bold transition cursor-pointer"
+                  aria-label="Close notifications"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Notifications Body */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5 max-h-[380px] sm:max-h-[460px] custom-scrollbar overscroll-contain">
+              {notifications.length === 0 ? (
+                <div className="py-12 text-center space-y-2">
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto text-slate-400">
+                    <Bell className="w-5 h-5 opacity-40" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-300">No notifications in past 30 days</p>
+                  <p className="text-xs text-slate-500 max-w-[240px] mx-auto">
+                    Contest updates, match starts, and rewards will show up here.
+                  </p>
+                </div>
+              ) : (
+                notifications.map((n) => {
+                  const isUnread = !n.is_read && !n.isRead;
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => markRead(n.id)}
+                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
+                        isUnread
+                          ? 'bg-cyan-950/40 border-cyan-400/50 shadow-sm shadow-cyan-500/10 hover:bg-cyan-950/60'
+                          : 'bg-white/[0.02] border-white/5 hover:bg-white/5'
+                      }`}
+                    >
+                      <div className="pt-1.5 shrink-0">
+                        <span
+                          className={`inline-block w-2.5 h-2.5 rounded-full ${
+                            isUnread ? 'bg-cyan-400 shadow-[0_0_8px_rgba(0,240,255,0.8)]' : 'bg-slate-600'
+                          }`}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <h4 className="text-xs font-bold text-white truncate">
+                            {n.title || 'League Alert'}
+                          </h4>
+                          <span className="text-[10px] text-slate-400 shrink-0 font-mono">
+                            {formatTimeAgo(n.createdAt || n.created_at)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed break-words">
+                          {n.message}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-4 py-2.5 bg-black/40 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400 shrink-0">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                Past 30 Days Activity
+              </span>
+              <span className="text-slate-500 font-mono">Auto-purged &gt;30d</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MOBILE SLIDE-OVER DRAWER */}
       {mobileDrawerOpen && (
